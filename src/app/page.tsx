@@ -46,6 +46,17 @@ const Home: React.FC = () => {
     return background || '#ffffff';
   }
 
+  const cursor = () => {
+    const canvas = document.querySelector('svg');
+    if (isPanning) {
+      return 'grab';
+    }
+    if (tool === 'pan') {
+      return 'crosshair';
+    }
+    return 'default';
+  }
+
   return (
     <>
     <div ref={divRef} className="flex flex-col items-center">

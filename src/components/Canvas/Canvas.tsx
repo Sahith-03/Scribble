@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {Shape,Line} from './line';
+import "./Canvas.css";
 
 interface LineData {
   x1: number;
@@ -10,6 +11,7 @@ interface LineData {
   y2: number;
   color: string;
   width: number;
+  opacity: number;
 }
 
 interface ShapeData{
@@ -45,27 +47,49 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const [currentLine, setCurrentLine] = useState<{ x1: number; y1: number } | null>(null);
   const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'rectangle',color:stylusColor,strokeWidth:lineWidth});
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
+  const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [laserLines, setLaserLines] = useState<LineData[]>([]);
+
+  useEffect(() => {
+    if(tool === 'pan'){
+      svgRef.current?.classList.add('cursor-grab');
+    }
+    else{
+      svgRef.current?.classList.remove('cursor-grab');
+    }
+  }, [viewBox]);
+
+  const getTransformedCoordinates = (clientX: number, clientY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    return {
+      x: (x / rect.width) * viewBox[2] + viewBox[0],
+      y: (y / rect.height) * viewBox[3] + viewBox[1],
+    };
+  };
 
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     if(tool === 'pan'){
-      alert("panning")
-    if (e.button === 1) { // Middle mouse button for panning
+    if (e.button === 0) { // Middle mouse button for panning
+      // alert("panning")
+      svgRef.current?.classList.add('cursor-grabbing');
       setIsPanning(true);
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
     }
     // if(tool !== 'pen') return;
-    const x = e.clientX - rect.left + viewBox[0];
-    const y = e.clientY - rect.top + viewBox[1];
+    const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
     setIsDrawing(true);
     setCurrentLine({ x1: x, y1: y });
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if(tool === 'pan'){
+    // if(tool === 'pan'){
     if (isPanning && startPan) {
       const dx = e.clientX - startPan.x;
       const dy = e.clientY - startPan.y;
@@ -73,19 +97,28 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
-    }
+    // }
+    if (!isDrawing || !currentLine || !currentShape) return;
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
-    if (!isDrawing || !currentLine || !currentShape) return;
-    const x = e.clientX - rect.left + viewBox[0];
-    const y = e.clientY - rect.top + viewBox[1];
+    const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
+
+
     if(tool === 'pen'){
-      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth }]);
+      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 }]);
       setCurrentLine({ x1: x, y1: y });
     }
-    if(tool === 'eraser'){
-      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color:background , width: lineWidth }]);
+    else if(tool === 'eraser'){
+      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color:background , width: lineWidth,opacity:1 }]);
       setCurrentLine({ x1: x, y1: y });
+    }
+    else if (tool === 'laser') {
+      if (!currentLine) return;
+      const newLaserLine: LineData = { x1: currentLine.x1, y1: currentLine.y1, x2: x, y2: y, color: 'red', width: lineWidth, opacity: 1 };
+      setLaserLines((prevLines) => [...prevLines, newLaserLine]);
+      setCurrentLine({ x1: x, y1: y });
+      if (laserTimeout) clearTimeout(laserTimeout);
+      setLaserTimeout(setTimeout(() => fadeLaserLine(newLaserLine), 100));
     }
 
 
@@ -108,13 +141,38 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     // setShapes((prevShapes)=> [...prevShapes,currentShape]);
   };
 
+  const fadeLaserLine = (line: LineData) => {
+    const fadeStep = () => {
+      setLaserLines((prevLines) => {
+        const updatedLines = prevLines.map((l) => (l === line ? { ...l, opacity: l.opacity - 0.2 } : l));
+        return updatedLines.filter((l) => l.opacity > 0);
+      });
+      if (line.opacity > 0) {
+        requestAnimationFrame(fadeStep);
+      }
+    };
+    fadeStep();
+  };
+
   const handleMouseUpOrOut = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isPanning && tool === 'pan') {
+    // if(tool==='laser'){
+    //   if(lines.length > 0){
+    //     const lastLine = lines.pop();
+    //   }
+    // }
+    if (tool === 'laser') {
+      if (laserTimeout) clearTimeout(laserTimeout);
+      setLaserTimeout(setTimeout(() => {
+        if (currentLine) fadeLaserLine({ x1: currentLine.x1, y1: currentLine.y1, x2: currentLine.x1, y2: currentLine.y1, color: stylusColor, width: lineWidth, opacity: 1 });
+      }, 100));
+    }
+    else if (isPanning && tool === 'pan') {
+      svgRef.current?.classList.remove('cursor-grabbing');
       setIsPanning(false);
       setStartPan(null);
       return;
     }
-    if(currentShape && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
+    else if(currentShape && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
     console.log("Shapes:",shapes.length)
     setShapes((prevShapes)=> [...prevShapes,currentShape]);
     }
@@ -127,19 +185,25 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
     const newWidth = viewBox[2] * zoomFactor;
     const newHeight = viewBox[3] * zoomFactor;
-    setViewBox([viewBox[0], viewBox[1], newWidth, newHeight]);
+
+    const mouseX = e.clientX - svgRef.current!.getBoundingClientRect().left;
+    const mouseY = e.clientY - svgRef.current!.getBoundingClientRect().top;
+
+    const newViewBoxX = viewBox[0] + (mouseX / svgRef.current!.clientWidth) * (viewBox[2] - newWidth);
+    const newViewBoxY = viewBox[1] + (mouseY / svgRef.current!.clientHeight) * (viewBox[3] - newHeight);
+
+    setViewBox([newViewBoxX, newViewBoxY, newWidth, newHeight]);
   };
 
   const panCanvas = () => {
     setIsPanning(!isPanning);
   };
 
-  const handleShapeClicks = (index: number,e: React.MouseEventHandler<SVGCircleElement | SVGRectElement>) => {
-    if(tool == "eraser"){
-      alert("Erasing")
-      setShapes(shapes.filter((_,i)=> i!==index));
+  const handleShapeClick = (index: number, e: React.MouseEvent<SVGCircleElement | SVGRectElement | SVGEllipseElement>) => {
+    if (tool === 'eraser') {
+      setShapes(shapes.filter((_, i) => i !== index));
     }
-  }
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -147,20 +211,23 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         ref={svgRef}
         width="100vw"
         height="100vh"
-        className="border border-gray-300 background-image: radial-gradient(black 1px, transparent 0);"
+        className={`border border-gray-300 ${tool === 'pan' ? 'cursor-grab' : 'cursor-crosshair'}`}
         viewBox={viewBox.join(' ')}
         // viewBox='0 0 800 1000'
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUpOrOut}
         onMouseLeave={handleMouseUpOrOut}
-        // onWheel={handleWheel}
+        onWheel={handleWheel}
       >
         {lines.map((line, index) => (
           <Line key={index} {...line} />
         ))};
+        {laserLines.map((laserLine, index) => (
+          <Line key={index} {...laserLine} />
+        ))}
         {shapes.map((shape,index)=>(
-          <Shape index={index} {...shape} handleShapeClicks={handleShapeClicks}/>
+          <Shape index={index} {...shape} handleShapeClick={handleShapeClick}/>
         ))}
       </svg>
     </div>

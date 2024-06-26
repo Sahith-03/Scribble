@@ -5,3 +5,11 @@
 input[type="radio"]:checked + label{
     @apply text-blue-700;
 }
+
+input[type="radio"] + label{
+    @apply hover:cursor-pointer;
+}
+
+/* label{
+    @apply cursor-pointer;
+} */
