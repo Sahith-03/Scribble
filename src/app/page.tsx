@@ -18,6 +18,8 @@ const Home: React.FC = () => {
       lines.forEach(line => line.remove());
       const shapes = canvas.querySelectorAll('rect, circle');
       shapes.forEach(shape => shape.remove());
+      const polylines = canvas.querySelectorAll('polyline');
+      polylines.forEach(polyline => polyline.remove());
     }
   };
 
