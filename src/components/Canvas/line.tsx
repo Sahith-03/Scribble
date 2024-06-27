@@ -26,6 +26,12 @@ interface ShapeProps{
   index: number;
 }
 
+interface PolyLineProps{
+  points: string;
+  color: string;
+  width: number;
+}
+
 const Line: React.FC<LineProps> = ({ x1, y1, x2, y2, color, width,opacity }) => {
   return <line x1={x1} y1={y1} x2={x2} y2={y2} opacity={opacity} stroke={color} strokeWidth={width} strokeLinecap="round" />;
 };
@@ -45,4 +51,8 @@ const Shape: React.FC<ShapeProps> = ({ x1, y1, type, width, height, radius, colo
   return null;
 };
 
-export {Shape,Line};
+const PolyLine: React.FC<PolyLineProps> = ({ points, color, width }) => {
+  return <polyline points={points} stroke={color} strokeWidth={width} fill="none" />;
+}
+
+export {Shape,Line,PolyLine};

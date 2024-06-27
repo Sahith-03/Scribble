@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from 'react';
-import {Shape,Line} from './line';
+import {Shape,Line,PolyLine} from './line';
 import "./Canvas.css";
 
 interface LineData {
@@ -12,6 +12,12 @@ interface LineData {
   color: string;
   width: number;
   opacity: number;
+}
+
+interface PolyLineData{
+  points: string;
+  color: string;
+  width: number;
 }
 
 interface ShapeData{
@@ -42,9 +48,11 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   // const [stylusColor, setStylusColor] = useState('#000000');
   // const [lineWidth, setLineWidth] = useState(2);
   const [lines, setLines] = useState<LineData[]>([]);
+  const [polyLine,setPolyLines] = useState<PolyLineData[]>([]); 
   const [shapes,setShapes] = useState<ShapeData[]>([]);
   const [erasePaths,setErasePaths] = useState<LineData[]>([]);
-  const [currentLine, setCurrentLine] = useState<{ x1: number; y1: number } | null>(null);
+  const [points,setPoints] = useState<string>('');
+  const [currentLine, setCurrentLine] = useState<LineData>({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 });
   const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'rectangle',color:stylusColor,strokeWidth:lineWidth});
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
   const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -84,8 +92,11 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
     // if(tool !== 'pen') return;
     const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
+    if(tool === 'pen'){
+      setPoints(`${x},${y}`);
+    }
     setIsDrawing(true);
-    setCurrentLine({ x1: x, y1: y });
+    setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -103,22 +114,34 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     if (!rect) return;
     const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
 
-
-    if(tool === 'pen'){
+    if(tool === 'line'){
+      if(lines.length > 0){
+        const lastLine = lines.pop();
+        // setLines(lines);     
+      }
       setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 }]);
-      setCurrentLine({ x1: x, y1: y });
+      // setCurrentLine({ x1: x, y1: y });
+    }
+    else if(tool === 'pen'){
+      // setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 }]);
+      // setCurrentLine({ x1: x, y1: y });
+      setPoints(`${points} ${x},${y}`);
+      setPolyLines((prevLines) => [...prevLines, { points: points, color: stylusColor, width: lineWidth }]);
     }
     else if(tool === 'eraser'){
       setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color:background , width: lineWidth,opacity:1 }]);
-      setCurrentLine({ x1: x, y1: y });
+      setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: background, width: lineWidth,opacity:1});
     }
     else if (tool === 'laser') {
       if (!currentLine) return;
+      // if(laserLines.length > 0){
+      //   // setLaserLines(laserLines);
+      // }
       const newLaserLine: LineData = { x1: currentLine.x1, y1: currentLine.y1, x2: x, y2: y, color: 'red', width: lineWidth, opacity: 1 };
       setLaserLines((prevLines) => [...prevLines, newLaserLine]);
-      setCurrentLine({ x1: x, y1: y });
-      if (laserTimeout) clearTimeout(laserTimeout);
-      setLaserTimeout(setTimeout(() => fadeLaserLine(newLaserLine), 100));
+      // setCurrentLine({ x1: x, y1: y });
+      // if (laserTimeout) clearTimeout(laserTimeout);
+      // setLaserTimeout(setTimeout(() => fadeLaserLine(newLaserLine), 100));
     }
 
 
@@ -155,16 +178,21 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   };
 
   const handleMouseUpOrOut = (e: React.MouseEvent<SVGSVGElement>) => {
-    // if(tool==='laser'){
-    //   if(lines.length > 0){
-    //     const lastLine = lines.pop();
-    //   }
-    // }
+    if(tool==='laser'){
+        const lastLine = setLaserLines([]);
+    }
     if (tool === 'laser') {
       if (laserTimeout) clearTimeout(laserTimeout);
       setLaserTimeout(setTimeout(() => {
         if (currentLine) fadeLaserLine({ x1: currentLine.x1, y1: currentLine.y1, x2: currentLine.x1, y2: currentLine.y1, color: stylusColor, width: lineWidth, opacity: 1 });
       }, 100));
+    }
+    else if(tool === 'line'){
+      console.log("Lines:",lines.length)
+      setLines((prevLines)=> [...prevLines,currentLine]);
+    }
+    else if(tool === 'pen'){
+      setPoints('');
     }
     else if (isPanning && tool === 'pan') {
       svgRef.current?.classList.remove('cursor-grabbing');
@@ -177,7 +205,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     setShapes((prevShapes)=> [...prevShapes,currentShape]);
     }
     setIsDrawing(false);
-    setCurrentLine(null);
+    // setCurrentLine([]);
   };
 
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
@@ -220,8 +248,8 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         onMouseLeave={handleMouseUpOrOut}
         onWheel={handleWheel}
       >
-        {lines.map((line, index) => (
-          <Line key={index} {...line} />
+        {polyLine.map((polyline, index) => (
+          <PolyLine key={index} {...polyline} />
         ))};
         {laserLines.map((laserLine, index) => (
           <Line key={index} {...laserLine} />
@@ -229,7 +257,15 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         {shapes.map((shape,index)=>(
           <Shape index={index} {...shape} handleShapeClick={handleShapeClick}/>
         ))}
+        {lines.map((line, index) => (
+          <Line key={index} {...line} />
+        ))}
       </svg>
+      <div id="scale">
+        <button>+</button>
+        <button><span id="scalePercent"></span></button>
+        <button>-</button>
+      </div>
     </div>
   );
 };
