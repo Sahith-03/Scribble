@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, use, useCallback } from 'react';
 import {Shape,Line,PolyLine} from './line';
 import "./Canvas.css";
 
@@ -38,9 +38,16 @@ interface toolBarProps{
   setIsPanning: (isPanning: boolean) => void;
   tool: string;
   background: string;
+  history: PolygonData[][];
+  setHistory: React.Dispatch<React.SetStateAction<PolygonData[][]>>
 }
 
-const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background}) => {
+interface PolygonData{
+  polygon: ShapeData | LineData | PolyLineData;
+  type: string;
+}
+
+const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,history,setHistory}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   // const [isPanning, setIsPanning] = useState(false);
@@ -53,10 +60,14 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const [erasePaths,setErasePaths] = useState<LineData[]>([]);
   const [points,setPoints] = useState<string>('');
   const [currentLine, setCurrentLine] = useState<LineData>({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 });
-  const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'rectangle',color:stylusColor,strokeWidth:lineWidth});
+  const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth});
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
   const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
   const [laserLines, setLaserLines] = useState<LineData[]>([]);
+  const [polygons,setPolygon] = useState<PolygonData[]>([]);
+  const [startPoint,setStartPoint] = useState<{x1:number,y1:number}>({x1:0,y1:0});
+  // const [history,setHistory] = useState<PolygonData[][]>([]);
+  const [polygonStack,setPolygonStack] = useState<PolygonData[][]>([]);
 
   useEffect(() => {
     if(tool === 'pan'){
@@ -66,6 +77,26 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       svgRef.current?.classList.remove('cursor-grab');
     }
   }, [viewBox]);
+
+  useEffect(() => {
+    if(history.length > 0){
+      if(history[history.length - 1] !== polygons){
+      setHistory((prevHistory) =>(prevHistory?[...prevHistory, polygons] : [polygons] ) );
+      console.log("Polygons:",polygons)
+      }
+    }
+    else{
+      setHistory([polygons]);
+    }
+  }, [polygons]);
+
+  useEffect(() => {
+    console.log('PolygonStack:',polygonStack)
+  },[polygonStack])
+
+  useEffect(() => {
+    console.log("History:",history)
+  },[history])
 
   const getTransformedCoordinates = (clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -96,7 +127,8 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       setPoints(`${x},${y}`);
     }
     setIsDrawing(true);
-    setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
+    setStartPoint({x1:x,y1:y});
+    // setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -115,22 +147,29 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
 
     if(tool === 'line'){
-      if(lines.length > 0){
-        const lastLine = lines.pop();
-        // setLines(lines);     
-      }
-      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 }]);
-      // setCurrentLine({ x1: x, y1: y });
+      setCurrentLine({ x1: startPoint.x1, y1: startPoint.y1, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
+      setLines((prevLines) => [...prevLines, currentLine]);
+      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:currentLine,type:'line'}] : [{polygon:currentLine,type:'line'}]));
+      // if(lines.length > 0){
+      //   const lastLine = lines.pop();
+      //   const lastPolygon = polygons.pop();
+      //   // setLines(lines);
+      // }
+      console.log("polygons:",polygons.length)
+      // setPolygon((prevPolygon)=>[...prevPolygon,{polygon:currentLine,type:'line'}]);
+      // setCurrentLine({ x1: x, y1: y });mem
     }
     else if(tool === 'pen'){
       // setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 }]);
       // setCurrentLine({ x1: x, y1: y });
       setPoints(`${points} ${x},${y}`);
       setPolyLines((prevLines) => [...prevLines, { points: points, color: stylusColor, width: lineWidth }]);
+      setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{points:points,color:stylusColor,width:lineWidth},type:'polyline'}] : [{polygon:{points:points,color:stylusColor,width:lineWidth},type:'polyline'}] ));
     }
     else if(tool === 'eraser'){
-      setLines((prevLines) => [...prevLines, { ...currentLine, x2: x, y2: y, color:background , width: lineWidth,opacity:1 }]);
-      setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: background, width: lineWidth,opacity:1});
+      setPoints(`${points} ${x},${y}`);
+      setPolyLines((prevLines) => [...prevLines, { points: points, color: background, width: lineWidth }]);
+      setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{points:points,color:background,width:lineWidth},type:'polyline'}] : [{polygon:{points:points,color:background,width:lineWidth},type:'polyline'}] ));
     }
     else if (tool === 'laser') {
       if (!currentLine) return;
@@ -144,23 +183,31 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       // setLaserTimeout(setTimeout(() => fadeLaserLine(newLaserLine), 100));
     }
 
-
-    if(shapes.length > 0 && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
-      const lastShape = shapes.pop();
-    }
+    // if(shapes.length > 0 && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
+    //   const lastShape = shapes.pop();
+    //   // const lastPolygon = polygons.pop();
+    //   setPolygon((prevPolygon)=> prevPolygon.slice(0,-1));
+    // }
     if (tool === 'rectangle') {
-      const width = x - currentLine.x1, height = y - currentLine.y1;
-      setShapes((prevShapes)=> [...prevShapes,{...currentLine, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth}])
-      // setCurrentShape({...currentLine, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth});
+      const width = x - startPoint.x1, height = y - startPoint.y1;
+      setCurrentShape({...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth});
+      setShapes((prevShapes)=> [...prevShapes,{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth}])
+      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth},type:"rectangle"}] : [{polygon:{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth},type:"rectangle"}]));
+      
     } else if (tool === 'square') {
-      const side = Math.max(Math.abs(x - currentLine.x1), Math.abs(y - currentLine.y1));
-      setShapes((prevShapes)=> [...prevShapes,{...currentLine, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth}]);
-      // setCurrentShape({...currentLine, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth});
+      const side = Math.max(Math.abs(x - startPoint.x1), Math.abs(y - startPoint.y1));
+      setCurrentShape({...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth});
+      setShapes((prevShapes)=> [...prevShapes,{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth}]);
+      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth},type:"square"}] : [{polygon:{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth},type:"square"}]));
     } else if (tool === 'circle') {
-      const radius = Math.sqrt(Math.pow(x - currentLine.x1, 2) + Math.pow(y - currentLine.y1, 2));
-      setShapes((prevShapes)=> [...prevShapes,{...currentLine, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth}]);
-      // setCurrentShape({...currentLine, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth});
+      const radius = Math.sqrt(Math.pow(x - startPoint.x1, 2) + Math.pow(y - startPoint.y1, 2));
+      setCurrentShape({...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth});
+      setShapes((prevShapes)=> [...prevShapes,currentShape]);
+      // setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth},type:"circle"}] : [{polygon:{...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth},type:"circle"}]));
     }
+    // useEffect(() => {
+    
+  // }, [shapes,polygons]);
     // setShapes((prevShapes)=> [...prevShapes,currentShape]);
   };
 
@@ -177,7 +224,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     fadeStep();
   };
 
-  const handleMouseUpOrOut = (e: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
     if(tool==='laser'){
         const lastLine = setLaserLines([]);
     }
@@ -190,8 +237,15 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     else if(tool === 'line'){
       console.log("Lines:",lines.length)
       setLines((prevLines)=> [...prevLines,currentLine]);
+      setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:currentLine,type:'line'}] : [{polygon:currentLine,type:'line'}]));
+      // setHistory((prevHistory) => (prevHistory ? [...prevHistory,polygons] : [polygons]));
     }
     else if(tool === 'pen'){
+      // setPolygon((prevPolygon)=>[...prevPolygon,{polygon:{points:points,color:stylusColor,width:lineWidth},type:'polyline'}]);
+      setPoints('');
+    }
+    else if(tool === 'eraser'){
+      // setPolygon((prevPolygon)=>[...prevPolygon,{polygon:{points:points,color:background,width:lineWidth},type:'polyline'}]);
       setPoints('');
     }
     else if (isPanning && tool === 'pan') {
@@ -203,9 +257,13 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     else if(currentShape && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
     console.log("Shapes:",shapes.length)
     setShapes((prevShapes)=> [...prevShapes,currentShape]);
+    setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:currentShape,type:currentShape.type}] : [{polygon:currentShape,type:currentShape.type}]));
     }
+    // setHistory((prevHistory) => (prevHistory ? [...prevHistory,polygons] : [polygons]));
+    setPolygonStack([]);
     setIsDrawing(false);
-    // setCurrentLine([]);
+    setCurrentShape({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth})
+    setCurrentLine({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 });
   };
 
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
@@ -233,6 +291,31 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
   };
 
+  const undo = useCallback(()=>{
+    if (history.length > 1) {
+      const lasthistory = history[history.length - 1];
+      setHistory((prevHistory)=> {
+        const history = [...prevHistory];
+        const lastHistory = history.pop();
+        if (lastHistory !== undefined) 
+        {
+          setPolygon(history[history.length - 1]);
+        }
+        return history;
+      });
+      setPolygonStack((prevPolygonStack) => [...prevPolygonStack,lasthistory]);
+    }
+  },[history,polygons])
+
+  const redo = useCallback(() => {
+    if (polygonStack.length > 0) {
+      const nextChange = polygonStack[polygonStack.length - 1];
+      setPolygonStack((prevPolygonStack) => prevPolygonStack.slice(0, -1));
+      if(nextChange === undefined) return;
+      setHistory((prevHistory) =>(prevHistory? [...prevHistory, nextChange] : [nextChange] ) );
+    }
+  },[polygonStack,polygons])
+
   return (
     <div className="flex flex-col items-center">
       <svg
@@ -244,11 +327,20 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         // viewBox='0 0 800 1000'
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUpOrOut}
-        onMouseLeave={handleMouseUpOrOut}
+        onMouseUp={handleMouseUp}
         onWheel={handleWheel}
       >
-        {polyLine.map((polyline, index) => (
+        {
+          history[history.length - 1]?.map((polygon,index)=>(
+            polygon.type === 'line' ? <Line key={index} {...polygon.polygon as LineData} /> : 
+            polygon.type === 'polyline' ? <PolyLine key={index} {...polygon.polygon as PolyLineData} /> : 
+            <Shape key={index} index={index} {...polygon.polygon as ShapeData}/>
+          ))
+        }
+        <Line {...currentLine} />
+        <Shape {...currentShape} />
+
+        {/* {polyLine.map((polyline, index) => (
           <PolyLine key={index} {...polyline} />
         ))};
         {laserLines.map((laserLine, index) => (
@@ -259,12 +351,11 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         ))}
         {lines.map((line, index) => (
           <Line key={index} {...line} />
-        ))}
+        ))} */}
       </svg>
-      <div id="scale">
-        <button>+</button>
-        <button><span id="scalePercent"></span></button>
-        <button>-</button>
+      <div>
+        <button id="undo" onClick={undo}>Undo</button>
+        <button id="redo" onClick={redo}>Redo</button>
       </div>
     </div>
   );

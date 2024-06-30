@@ -22,8 +22,7 @@ interface ShapeProps{
   radius?: number;
   color: string;
   strokeWidth: number;
-  handleShapeClick: (index: number, e: React.MouseEvent<SVGCircleElement | SVGRectElement | SVGEllipseElement>) => void;
-  index: number;
+  index?: number;
 }
 
 interface PolyLineProps{
@@ -37,15 +36,15 @@ const Line: React.FC<LineProps> = ({ x1, y1, x2, y2, color, width,opacity }) => 
 };
 
 
-const Shape: React.FC<ShapeProps> = ({ x1, y1, type, width, height, radius, color, strokeWidth, handleShapeClick, index }) => {
-  const handleClick = (e: React.MouseEvent<SVGCircleElement | SVGRectElement | SVGEllipseElement>) => {
-    handleShapeClick(index, e);
-  };
+const Shape: React.FC<ShapeProps> = ({ x1, y1, type, width, height, radius, color, strokeWidth, index }) => {
+  // const handleClick = (e: React.MouseEvent<SVGCircleElement | SVGRectElement | SVGEllipseElement>) => {
+  //   handleShapeClick(index, e);
+  // };
   if (type === 'rectangle' || type === 'square') {
-    return <rect onClick={handleClick} x={x1} y={y1} width={width} height={height} stroke={color} strokeWidth={strokeWidth} fill="none" />;
+    return <rect x={x1} y={y1} width={width} height={height} stroke={color} strokeWidth={strokeWidth} fill="none" />;
   }
   if (type === 'circle') {
-    return <circle onClick={handleClick} cx={x1} cy={y1} r={radius} stroke={color} strokeWidth={strokeWidth} fill="none" />;
+    return <circle cx={x1} cy={y1} r={radius} stroke={color} strokeWidth={strokeWidth} fill="none" />;
   }
   // Add similar logic for other shapes like triangle
   return null;
