@@ -31,6 +31,12 @@ interface PolyLineProps{
   width: number;
 }
 
+interface textData{
+  x1: number;
+  y1: number;
+  prompt : string;
+}
+
 const Line: React.FC<LineProps> = ({ x1, y1, x2, y2, color, width,opacity }) => {
   return <line x1={x1} y1={y1} x2={x2} y2={y2} opacity={opacity} stroke={color} strokeWidth={width} strokeLinecap="round" />;
 };
@@ -54,4 +60,8 @@ const PolyLine: React.FC<PolyLineProps> = ({ points, color, width }) => {
   return <polyline points={points} stroke={color} strokeWidth={width} fill="none" />;
 }
 
-export {Shape,Line,PolyLine};
+const Text: React.FC<textData> = ({x1,y1,prompt}) => {
+  return <text x={x1} y={y1} fontSize={20}>{prompt}</text>
+}
+
+export {Shape,Line,PolyLine,Text};

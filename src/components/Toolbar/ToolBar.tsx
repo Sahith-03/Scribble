@@ -63,6 +63,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <label htmlFor="circle"> Circle </label>
       <input type="radio" onClick={()=> {selectTool('pen')}} name="tool" id="pen" hidden />
       <label htmlFor="pen"> Pen </label>
+      <input type="radio" onClick={()=> {selectTool('text')}} name="tool" id="text" hidden />
+      <label htmlFor="text"> Text </label>
       <input type="radio" onClick={()=> {selectTool('pan')}} name="tool" id="pan" hidden />
       <label htmlFor="pan"> Pan </label>
       <input type="radio" onClick={()=> {selectTool('eraser')}} name="tool" id="eraser" hidden />

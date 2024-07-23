@@ -31,8 +31,14 @@ interface ShapeData{
   strokeWidth: number;
 }
 
+interface textData{
+  x1:number;
+  y1:number;
+  prompt: string;
+}
+
 interface PolygonData{
-  polygon: ShapeData | LineData | PolyLineData;
+  polygon: ShapeData | LineData | PolyLineData | textData;
   type: string;
 }
 
