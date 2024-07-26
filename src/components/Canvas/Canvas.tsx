@@ -38,8 +38,10 @@ interface toolBarProps{
   setIsPanning: (isPanning: boolean) => void;
   tool: string;
   background: string;
-  history: PolygonData[][];
-  setHistory: React.Dispatch<React.SetStateAction<PolygonData[][]>>
+  // history: PolygonData[][];
+  polygons: PolygonData[];
+  setPolygon: React.Dispatch<React.SetStateAction<PolygonData[]>>;
+  // setHistory: React.Dispatch<React.SetStateAction<PolygonData[][]>>;
 }
 
 interface PolygonData{
@@ -53,7 +55,7 @@ interface textData{
   prompt : string;
 }
 
-const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,history,setHistory}) => {
+const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,polygons,setPolygon}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -71,13 +73,13 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
   const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
   const [laserLines, setLaserLines] = useState<LineData[]>([]);
-  const [polygons,setPolygon] = useState<PolygonData[]>([]);
+  // const [polygons,setPolygon] = useState<PolygonData[]>([]);
   const [startPoint,setStartPoint] = useState<{x1:number,y1:number}>({x1:0,y1:0});
-  // const [history,setHistory] = useState<PolygonData[][]>([]);
+  const [history,setHistory] = useState<PolygonData[][]>([]);
   const [polygonStack,setPolygonStack] = useState<PolygonData[][]>([]);
   const [text,setText] = useState<textData|null>(null);
   const [isAddingText,setIsAddingText] = useState<boolean>(false);
-  // const [currentText,]
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if(tool === 'pan'){
@@ -157,9 +159,27 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       setCurrentLine({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 })
     }
     else if(tool === 'text'){
-      setText({ x1:x, y1:y, prompt: ''});
+      // setText({ x1:x, y1:y, prompt: ''});
       setIsAddingText(true);
-      svgRef.current?.focus(); // Focus the SVG element to capture keyboard events
+      // svgRef.current?.focus();
+      const svg = svgRef.current;
+      if (!svg) return;
+
+      const point = svg.createSVGPoint();
+      point.x = e.clientX;
+      point.y = e.clientY;
+      const cursorPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
+
+      // setTextPosition({ x: cursorPoint.x, y: cursorPoint.y });
+      // setTextInput('');
+      setText({ x1: cursorPoint.x, y1: cursorPoint.y, prompt: '' });
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      // console.log("inputRef.current",inputRef.current)
+      if (textareaRef.current) {
+        textareaRef.current.style.left = `${cursorPoint.x}px`;
+        textareaRef.current.style.top = `${cursorPoint.y}px`;
+        textareaRef.current.focus();
+      }
     }
     else if (tool === 'rectangle' || tool === 'square' || tool === 'circle') {
       setCurrentShape({
@@ -174,53 +194,40 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       });
     }
     setStartPoint({x1:x,y1:y});
-    // setCurrentLine({ x1: x, y1: y, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
   };
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (tool !== 'text' || !isAddingText) return;
-
-    if (e.key === 'Escape') {
-      if(text?.prompt){
-        setPolygon((prevPolygon) => [
-          ...prevPolygon,
-          {
-            polygon: text,
-            type: 'text',
-          }
-        ]);
-      } 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && text) {
+      if(text.prompt){
+        setText((prevText)=> {
+          if(!prevText) return null;
+          return { x1: prevText.x1, y1: prevText.y1, prompt: textareaRef.current?.value || '' };
+        })
+        setPolygon((prevPolygon) => [...prevPolygon,{polygon: text,type: 'text'}]);
+      }
       setText(null);
       setIsAddingText(false);
-    } 
-    else if (e.key === 'Enter') {
-      setText(() => {
-        if (!text) return null;
-        return { x1:text.x1,y1:text.y1, prompt: text.prompt + '\n' };
-      }
-    )}
-    else if (e.key === 'Backspace') {
-      setText(() => {
-        if (!text) return null;
-        return { x1:text.x1,y1:text.y1, prompt: text.prompt.slice(0,-1) };
-      });
-    } else {
-      setText(() => {
-        if (!text) return null;
-        return { x1:text.x1,y1:text.y1, prompt: text?.prompt + e.key};
-      });
     }
-  }, [tool, isAddingText, text]);
+    let x = parseInt(textareaRef.current!.style.height);
+    if(e.key === 'Enter' && text){
+      x=x+16;
+      console.log("height:",x)
+      textareaRef.current!.style.height = `${x}px`;
+    }
+  };
 
   useEffect(() => {
-    const svgElement = svgRef.current;
-    if (!svgElement) return;
+    if (isAddingText && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isAddingText]);
 
-    svgElement.addEventListener('keydown', handleKeyDown);
-    return () => {
-      svgElement.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleKeyDown]);
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText((prevText) => {
+      if (!prevText) return null;
+      return { x1: prevText.x1, y1: prevText.y1, prompt: e.target.value };
+    });
+  };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     // if(tool === 'pan'){
@@ -437,7 +444,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
         tabIndex={0}
-        // onKeyDown={handleKeyDown}
       >
         {
           history[history.length - 1]?.map((polygon,index)=>(
@@ -450,15 +456,26 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         {currentLine && <Line {...currentLine} />}
         <Shape {...currentShape} />
         {polyLine!==null && <PolyLine {...polyLine} />}
-        {text && isAddingText && (
-          <Text x1={text.x1} y1={text.y1} prompt={`"${text.prompt}"`} />
-        )}
         <text x={400} y={500}>
           <tspan>hello</tspan>
-          <tspan x={400} dy={20}>world</tspan>
+          <tspan x={400} dy={20}></tspan>
+          <tspan x={400} dy={40}>world</tspan>
         </text>
         
       </svg>
+      {isAddingText && (
+        <textarea
+          ref={textareaRef}
+          value={text?.prompt}
+          onChange={handleTextChange}
+          onKeyDown={handleKeyDown}
+          className="absolute text-base border border-gray-300 rounded px-3 py-1"
+          style={{
+            left: `${text!.x1}px`,
+            top: `${text!.y1}px`,
+          }}
+        />
+      )}
       {/* {tool === 'text' && text && (
         <input
           type="text"

@@ -50,7 +50,7 @@ const Home: React.FC = () => {
   const [isPanning, setIsPanning] = useState(false);
   const [tool, selectTool] = useState('pen');
   const [polygons,setPolygon] = useState<PolygonData[]>([]);
-  const [history, setHistory] = useState<PolygonData[][]>([]);
+  // const [history, setHistory] = useState<PolygonData[][]>([]);
 
   const clearCanvas = () => {
     // const canvas = document.querySelector('svg');
@@ -62,7 +62,8 @@ const Home: React.FC = () => {
     //   const polylines = canvas.querySelectorAll('polyline');
     //   polylines.forEach(polyline => polyline.remove());
     // }
-    setHistory((prevHistory) => [...prevHistory, []]); 
+    setPolygon([]);
+    // setHistory((prevHistory) => [...prevHistory, []]); 
   };
 
   const downloadImage = () => {
@@ -121,10 +122,10 @@ const Home: React.FC = () => {
       setIsPanning={setIsPanning}
       tool={tool}
       background={getBackground()}
-      // polygons={polygons}
-      // setPolygon={setPolygon}
-      history={history}
-      setHistory={setHistory}
+      polygons={polygons}
+      setPolygon={setPolygon}
+      // history={history}
+      // setHistory={setHistory}
       />
     </div>
     </>

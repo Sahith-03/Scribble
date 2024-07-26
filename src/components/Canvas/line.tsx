@@ -61,7 +61,16 @@ const PolyLine: React.FC<PolyLineProps> = ({ points, color, width }) => {
 }
 
 const Text: React.FC<textData> = ({x1,y1,prompt}) => {
-  return <text x={x1} y={y1} fontSize={20}>{prompt}</text>
+  var string_array = prompt.split("\n");
+  return (
+    <text x={x1} y={y1} fontSize={20}>
+      {string_array.map((line, index) => (
+        <tspan key={index} x={x1} dy={`${index === 0 ? 0 : 1.2}em`}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
 }
 
 export {Shape,Line,PolyLine,Text};
