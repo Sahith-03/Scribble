@@ -3,6 +3,9 @@
 import React, { useState,useRef, useEffect} from 'react';
 import Canvas from '../components/Canvas/Canvas';
 import Toolbar from '../components/Toolbar/ToolBar';
+import {source_code_pro,indie_flower,nunito} from '../components/fonts';
+import type { NextFont } from 'next/dist/compiled/@next/font';
+
 
 interface LineData {
   x1: number;
@@ -29,12 +32,15 @@ interface ShapeData{
   radius?: number;
   color: string;
   strokeWidth: number;
+  fill: string;
 }
 
 interface textData{
   x1:number;
   y1:number;
   prompt: string;
+  font: NextFont;
+  color: string;
 }
 
 interface PolygonData{
@@ -48,8 +54,10 @@ const Home: React.FC = () => {
   const divRef = useRef<HTMLDivElement>(null);
   const [lineWidth, setLineWidth] = useState(2);
   const [isPanning, setIsPanning] = useState(false);
-  const [tool, selectTool] = useState('pen');
+  const [tool, selectTool] = useState('text');
   const [polygons,setPolygon] = useState<PolygonData[]>([]);
+  const [font, setFont] = useState(nunito);
+  const [fill, setFill] = useState('#ffffff');
   // const [history, setHistory] = useState<PolygonData[][]>([]);
 
   const clearCanvas = () => {
@@ -112,8 +120,11 @@ const Home: React.FC = () => {
         setLineWidth={setLineWidth}
         clearCanvas={clearCanvas}
         downloadImage={downloadImage}
-        panCanvas={panCanvas}
+        // panCanvas={panCanvas}
         selectTool={selectTool}
+        setFont={setFont}
+        tool={tool}
+        setFill={setFill}
       />
       <Canvas 
       stylusColor={stylusColor}
@@ -124,6 +135,8 @@ const Home: React.FC = () => {
       background={getBackground()}
       polygons={polygons}
       setPolygon={setPolygon}
+      font={font}
+      fill={fill}
       // history={history}
       // setHistory={setHistory}
       />

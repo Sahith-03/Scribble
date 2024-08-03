@@ -2,6 +2,8 @@
 
 import React from 'react';
 import "./ToolBar.css";
+import type { NextFont } from 'next/dist/compiled/@next/font';
+import SecondaryTools from './secondaryTools';
 
 interface ToolbarProps {
   stylusColor: string;
@@ -10,8 +12,11 @@ interface ToolbarProps {
   setLineWidth: (width: number) => void;
   clearCanvas: () => void;
   downloadImage: () => void;
-  panCanvas: () => void;
+  // panCanvas: () => void;
   selectTool: (tool: string) => void;
+  setFont: (font: NextFont) => void;
+  tool: string;
+  setFill: (fill: string) => void;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -21,8 +26,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setLineWidth,
   clearCanvas,
   downloadImage,
-  panCanvas,
-  selectTool
+  // panCanvas,
+  selectTool,
+  setFont,
+  setFill,
+  tool
 }) => {
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setStylusColor(e.target.value);
@@ -33,6 +41,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   };
   
   return (
+    <>
     <div id="toolbar" className="fixed flex flex-col top-0 left-0 m-4 p-4 bg-white border border-gray-300 rounded shadow-lg space-y-2 z-10">
       
       {/* <button onClick={() => selectTool('pan')} className="focus:text-blue-800">
@@ -61,7 +70,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <label htmlFor="square"> Square </label>
       <input type="radio" onClick={()=> {selectTool('circle')}} name="tool" id="circle" hidden />
       <label htmlFor="circle"> Circle </label>
-      <input type="radio" onClick={()=> {selectTool('pen')}} name="tool" id="pen" hidden />
+      <input type="radio" onClick={()=> {selectTool('pen')}} name="tool" id="pen" defaultChecked hidden />
       <label htmlFor="pen"> Pen </label>
       <input type="radio" onClick={()=> {selectTool('text')}} name="tool" id="text" hidden />
       <label htmlFor="text"> Text </label>
@@ -71,7 +80,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <label htmlFor="eraser"> Eraser </label>
       
       
-      <input
+      {/* <input
         type="color"
         value={stylusColor}
         onChange={handleColorChange}
@@ -84,7 +93,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         value={lineWidth}
         onChange={handleLineWidthChange}
         className="pl-1 rounded"
-      />
+      /> */}
       <button onClick={clearCanvas} className="p-2 bg-red-500 text-white rounded">
         Clear
       </button>
@@ -95,6 +104,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
         Download
       </button>
     </div>
+    <SecondaryTools
+      stylusColor={stylusColor}
+      setStylusColor={setStylusColor}
+      lineWidth={lineWidth}
+      setLineWidth={setLineWidth}
+      handleColorChange={handleColorChange}
+      handleLineWidthChange={handleLineWidthChange}
+      setFont={setFont}
+      setFill = {setFill}
+      tool={tool}
+      />
+    </>
   );
 };
 
