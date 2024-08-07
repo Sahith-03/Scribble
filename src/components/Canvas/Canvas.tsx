@@ -3,8 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {Shape,Line,PolyLine,Text} from './renderer';
 import type { NextFont } from 'next/dist/compiled/@next/font';
-// import {Source_Code_Pro,Indie_Flower,Nunito} from 'next/font/google';
-// import {source_code_pro,indie_flower,nunito} from '../fonts';
+import Quadtree from './Quadtree';
 
 import "./Canvas.css";
 
@@ -43,12 +42,11 @@ interface toolBarProps{
   setIsPanning: (isPanning: boolean) => void;
   tool: string;
   background: string;
-  // history: PolygonData[][];
   polygons: PolygonData[];
   font: NextFont;
   setPolygon: React.Dispatch<React.SetStateAction<PolygonData[]>>;
   fill: string;
-  // setHistory: React.Dispatch<React.SetStateAction<PolygonData[][]>>;
+  fontSize: number;
 }
 
 interface PolygonData{
@@ -62,16 +60,14 @@ interface textData{
   prompt : string;
   font: NextFont;
   color: string;
+  fontSize: number;
 }
 
-const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,polygons,setPolygon,font,fill}) => {
+const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,polygons,setPolygon,font,fill,fontSize}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  // const [isPanning, setIsPanning] = useState(false);
   const [viewBox, setViewBox] = useState([0, 0, window.innerWidth, window.innerHeight]);
-  // const [stylusColor, setStylusColor] = useState('#000000');
-  // const [lineWidth, setLineWidth] = useState(2);
   const [lines, setLines] = useState<LineData[]>([]);
   const [polyLine,setPolyLine] = useState<PolyLineData|null>(null); 
   const [shapes,setShapes] = useState<ShapeData[]>([]);
@@ -81,8 +77,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth,fill:fill});
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
   const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
-  // const [laserLines, setLaserLines] = useState<LineData[]>([]);
-  // const [polygons,setPolygon] = useState<PolygonData[]>([]);
   const [startPoint,setStartPoint] = useState<{x1:number,y1:number}>({x1:0,y1:0});
   const [history,setHistory] = useState<PolygonData[][]>([]);
   const [polygonStack,setPolygonStack] = useState<PolygonData[][]>([]);
@@ -90,6 +84,15 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const [isAddingText,setIsAddingText] = useState<boolean>(false);
   const [laserPaths, setLaserPaths] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedShapes,setSelectedShapes] = useState<PolygonData[]>([]);
+
+  const quadtreeRef = useRef<Quadtree>(new Quadtree({ x: window.innerWidth/2, y: window.innerHeight/2, w: window.innerWidth/2, h: window.innerHeight/2 }, 4));
+
+  useEffect(() => {
+    const quadtree = quadtreeRef.current;
+    quadtree.shapes = [];
+    polygons.forEach(polygon => quadtree.insert(polygon));
+  }, [polygons]);
 
   useEffect(() => {
     if(tool === 'pan'){
@@ -99,6 +102,12 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       svgRef.current?.classList.remove('cursor-grab');
     }
   }, [viewBox]);
+
+  useEffect(() => {
+    if(selectedShapes.length > 0){
+      console.log("SelectedShapes:",selectedShapes)
+    }
+  }, [selectedShapes]);
 
   useEffect(() => {
     if(history.length > 0){
@@ -122,18 +131,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     console.log("History:",history)
   },[history])
 
-  // useEffect(() => {
-  //   const source_code_pro = Source_Code_Pro({weight:"400",subsets:["latin"]});
-  //   const indie_flower = Indie_Flower({weight:"400",subsets:["latin"]});
-  //   const nunito = Nunito({ weight: "400", subsets: ["latin"] });
-
-  //   textareaRef.current?.classList.remove('Source_Code_Pro');
-  //   textareaRef.current?.classList.remove('Indie_Flower');
-  //   textareaRef.current?.classList.remove('Nunito');
-  //   textareaRef.current?.classList.add(font);
-
-  // },[font])
-
   useEffect(() => {
     console.log('effect');
     const timeout = setTimeout(() => {
@@ -153,7 +150,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   
         return updatedPaths;
       });
-    }, 40); // Adjust the interval duration as needed
+    }, 40);
   
     return () => clearInterval(interval);
     },1000)
@@ -170,16 +167,11 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
     if(tool === 'laser'){
     }
-    // console.log("Points:",points)
   },[points])
 
   useEffect(() => {
     console.log("Drawing:",isDrawing)
   },[isDrawing])
-
-  // useEffect(() => {
-  //   console.log("laserPath:",laserPaths)
-  // },[laserPaths])
 
   const getTransformedCoordinates = (clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -196,17 +188,62 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     if(tool === 'pan'){
-    if (e.button === 0) { // Middle mouse button for panning
-      // alert("panning")
+    if (e.button === 0) { 
       svgRef.current?.classList.add('cursor-grabbing');
       setIsPanning(true);
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
     }
-    // if(tool !== 'pen') return;
     setIsDrawing(true);
     const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
+    if(tool==="select"){
+      const selected = polygons.find((polygon)=> {
+        if(polygon.type==='line'){
+          const line = polygon.polygon as LineData;
+          const d1 = Math.sqrt(Math.pow(x - line.x1, 2) + Math.pow(y - line.y1, 2));
+          const d2 = Math.sqrt(Math.pow(x - line.x2, 2) + Math.pow(y - line.y2, 2));
+          const d3 = Math.sqrt(Math.pow(line.x1 - line.x2, 2) + Math.pow(line.y1 - line.y2, 2));
+            return Math.abs(d3 - (d1 + d2)) < 1;
+        }
+        else if(polygon.type==='polyline'){
+          // const polyline = polygon.polygon as PolyLineData;
+          // const points = polyline.points.split(",").map((point)=>point.split(" ").map((coord)=>parseInt(coord)));
+          // // const distance = Math.sqrt(Math.pow(x - parseInt(points[0]), 2) + Math.pow(y - parseInt(points[1]), 2));
+          // for(let i=0;i<points.length-1;i++){
+          //   console.log(x,y," ",points[i][0],points[i][1])
+          //   if(x===points[i][0] && y===points[i][1]){
+          //     return true;
+          //   }
+          // }
+          console.log("please update the function")
+          return false;
+        }
+        else if(polygon.type === 'rectangle'){
+          const shape = polygon.polygon as ShapeData;
+          if(shape.width && shape.height){
+          return x >= shape.x1 && x <= shape.x1 + shape.width && y >= shape.y1 && y <= shape.y1 + shape.height;
+          }
+        }
+        else if(polygon.type === 'square'){
+          const shape = polygon.polygon as ShapeData;
+          if(shape.width && shape.height){
+          return x >= shape.x1 && x <= shape.x1 + shape.width && y >= shape.y1 && y <= shape.y1 + shape.height;
+          }
+        }
+        else if(polygon.type === 'circle'){
+          const shape = polygon.polygon as ShapeData;
+          if(shape.radius){
+            const distance = Math.sqrt(Math.pow(x - shape.x1, 2) + Math.pow(y - shape.y1, 2));
+            return distance <= shape.radius;
+          }
+        }
+        else{
+        }
+        return false;
+      });
+      setSelectedShapes(selected?[selected]:[]);
+    }
     if(tool === 'pen' || tool === 'eraser'){
       setPoints(`${x} ${y}`);
       setPolyLine({points:'',color:stylusColor,width:lineWidth})
@@ -219,7 +256,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       setCurrentLine({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 })
     }
     else if(tool === 'text'){
-      // setText({ x1:x, y1:y, prompt: ''});
       setIsAddingText(true);
       // svgRef.current?.focus();
       const svg = svgRef.current;
@@ -232,7 +268,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
 
       // setTextPosition({ x: cursorPoint.x, y: cursorPoint.y });
       // setTextInput('');
-      setText({ x1: cursorPoint.x, y1: cursorPoint.y, prompt: '', font: font,color:stylusColor });
+      setText({ x1: cursorPoint.x, y1: cursorPoint.y, prompt: '', font: font,color:stylusColor,fontSize:fontSize });
       requestAnimationFrame(() => textareaRef.current?.focus());
       // console.log("inputRef.current",inputRef.current)
       if (textareaRef.current) {
@@ -262,7 +298,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       if(text.prompt){
         setText((prevText)=> {
           if(!prevText) return null;
-          return { x1: prevText.x1, y1: prevText.y1, prompt: textareaRef.current?.value || '',font:font,color:stylusColor };
+          return { x1: prevText.x1, y1: prevText.y1, prompt: textareaRef.current?.value || '',font:font,color:stylusColor,fontSize:fontSize };
         })
         setPolygon((prevPolygon) => [...prevPolygon,{polygon: text,type: 'text'}]);
       }
@@ -286,7 +322,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText((prevText) => {
       if (!prevText) return null;
-      return { x1: prevText.x1, y1: prevText.y1, prompt: e.target.value,font:font,color:stylusColor };
+      return { x1: prevText.x1, y1: prevText.y1, prompt: e.target.value,font:font,color:stylusColor,fontSize:fontSize };
     });
   };
 
@@ -299,11 +335,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
-    // }
     if (!isDrawing){
-      // console.log("Drawing:",isDrawing)
-      // console.log("CurrentLine:",currentLine)
-      // console.log("CurrentShape:",currentShape)
       console.log("Cannot Draw",isDrawing)
       return;
     }
@@ -320,15 +352,7 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       console.log("CurrentLine:",currentLine)
       setCurrentLine({ x1: startPoint.x1, y1: startPoint.y1, x2: x, y2: y, color: stylusColor, width: lineWidth,opacity:1 });
       setLines((prevLines) => [...prevLines, currentLine]);
-      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:currentLine,type:'line'}] : [{polygon:currentLine,type:'line'}]));
-      // if(lines.length > 0){
-      //   const lastLine = lines.pop();
-      //   const lastPolygon = polygons.pop();
-      //   // setLines(lines);
-      // }
       console.log("polygons:",polygons.length)
-      // setPolygon((prevPolygon)=>[...prevPolygon,{polygon:currentLine,type:'line'}]);
-      // setCurrentLine({ x1: x, y1: y });
     }
     else if(tool === 'pen' || tool === 'eraser'){
       setPoints((prevPoints)=>{
@@ -336,7 +360,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         return currentPoints;
       })
       
-      // setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{points:points,color:stylusColor,width:lineWidth},type:'polyline'}] : [{polygon:{points:points,color:stylusColor,width:lineWidth},type:'polyline'}] ));
     }
     else if(tool === 'laser'){
       setLaserPaths((prev) => {
@@ -345,113 +368,41 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         newPaths[newPaths.length - 1] = newPaths[newPaths.length - 1] + `,${x} ${y}`;
         return newPaths;
       });
-      // setPolyLine({points:points,color:'red',width:lineWidth})
 
     }
-    
-    // else if(tool === 'eraser'){
-    //   setPoints(`${points} ${x},${y}`);
-    //   setPolyLine({ points: points, color: background, width: lineWidth });
-    //   setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{points:points,color:background,width:lineWidth},type:'polyline'}] : [{polygon:{points:points,color:background,width:lineWidth},type:'polyline'}] ));
-    // }
-
-
-    // else if (tool === 'laser') {
-    //   if (!currentLine) return;
-      // if(laserLines.length > 0){
-      //   // setLaserLines(laserLines);
-      // }
-      // const newLaserLine: LineData = { x1: currentLine.x1, y1: currentLine.y1, x2: x, y2: y, color: 'red', width: lineWidth, opacity: 1 };
-      // setLaserLines((prevLines) => [...prevLines, newLaserLine]);
-      // setCurrentLine({ x1: x, y1: y });
-      // if (laserTimeout) clearTimeout(laserTimeout);
-      // setLaserTimeout(setTimeout(() => fadeLaserLine(newLaserLine), 100));
-    // }
-
-    // if(shapes.length > 0 && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
-    //   const lastShape = shapes.pop();
-    //   // const lastPolygon = polygons.pop();
-    //   setPolygon((prevPolygon)=> prevPolygon.slice(0,-1));
-    // }
     if (tool === 'rectangle') {
       const width = x - startPoint.x1, height = y - startPoint.y1;
       console.log("StartPoint:", startPoint)
       setCurrentShape({...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth,fill:fill});
-      // setShapes((prevShapes)=> [...prevShapes,{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth}])
-      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth},type:"rectangle"}] : [{polygon:{...startPoint, type: tool,width: width, height: height, color: stylusColor, strokeWidth: lineWidth},type:"rectangle"}]));
-      
-    } else if (tool === 'square') {
+    } 
+    else if (tool === 'square') {
       const side = Math.max(Math.abs(x - startPoint.x1), Math.abs(y - startPoint.y1));
       setCurrentShape({...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth,fill:fill});
       setShapes((prevShapes)=> [...prevShapes,{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth,fill:fill}]);
-      // setPolygon((prevPolygon)=>(prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth},type:"square"}] : [{polygon:{...startPoint, type: tool,width: side, height: side, color: stylusColor, strokeWidth: lineWidth},type:"square"}]));
-    } else if (tool === 'circle') {
+    } 
+    else if (tool === 'circle') {
       const radius = Math.sqrt(Math.pow(x - startPoint.x1, 2) + Math.pow(y - startPoint.y1, 2));
       setCurrentShape({...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth,fill:fill});
       setShapes((prevShapes)=> [...prevShapes,currentShape]);
-      // setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:{...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth},type:"circle"}] : [{polygon:{...startPoint, type: tool,radius:radius,color: stylusColor, strokeWidth: lineWidth},type:"circle"}]));
     }
-    // useEffect(() => {
-    
-  // }, [shapes,polygons]);
-    // setShapes((prevShapes)=> [...prevShapes,currentShape]);
   };
 
   const fadeLaserLine = (points:string,opacity:number) => {
     const fadeStep = () => {
-      // setLaserLines((prevLines) => {
-      //   const updatedLines = prevLines.map((l) => (l === line ? { ...l, opacity: l.opacity - 0.2 } : l));
-      //   return updatedLines.filter((l) => l.opacity > 0);
-      // });
       setPoints((prevPoints)=>{
-        // const currentPoints = 
         return prevPoints.slice(0,prevPoints.length-1);
       })
-      // if (opacity > 0) {
-      //   requestAnimationFrame(fadeStep);
-      // }
     };
     fadeStep();
   };
 
   const handleMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
-    // if(tool==='laser'){
-    //     const lastLine = setLaserLines([]);
-    // }
-    if (tool === 'laser' && polyLine) {
-      // if (laserTimeout) clearTimeout(laserTimeout);
-      // setLaserTimeout(setTimeout(() => {
-      //   console.log("Points:",points)
-      //   const opacity = 1;
-      //   if (currentLine) fadeLaserLine(points,opacity);
-      // }, 100));
-      // setLaserPaths((prevLaserPaths)=>{
-      //   return [...prevLaserPaths,points];
-      // });
-      
-      // setTimeout(() => {
-        // setInterval(() => {
-        //   // setPoints((prevPoints)=>{
-        //   //   const currentPoints = prevPoints.split(',').slice(1,prevPoints.length-1).join(',');
-        //   //   return currentPoints;
-        //   // });
-        //   setLaserPaths((prevLaserPaths)=>{
-        //     console.log("Inside interval")
-        //     const laser = prevLaserPaths[0].split(',').slice(1,prevLaserPaths[0].length-1).join(',');
-        //     prevLaserPaths[0]=laser;
-        //     return prevLaserPaths;
-        //   })
-        // }, 40);
-    // }, 1000);
-      // setPolygon((prevPolygon)=>[...prevPolygon,{polygon:polyLine,type:'polyline'}]);
-      // setPoints('');
-    }
-    else if(tool === 'line'){
+    if(tool === 'line'){
       console.log("Lines:",lines.length)
       if(currentLine){
       setLines((prevLines)=> [...prevLines,currentLine]);
       setPolygon((prevPolygon)=>[...prevPolygon,{polygon:currentLine,type:'line'}]);
-      }// setHistory((prevHistory) => (prevHistory ? [...prevHistory,polygons] : [polygons]));
+      }
     }
     else if(tool === 'pen' && polyLine){
       setPolygon((prevPolygon)=>[...prevPolygon,{polygon:polyLine,type:'polyline'}]);
@@ -469,10 +420,8 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
     else if(currentShape && tool === 'rectangle' || tool === 'square' || tool === 'circle'){
     console.log("Shapes:",shapes.length)
-    // setShapes((prevShapes)=> [...prevShapes,currentShape]);
       setPolygon((prevPolygon)=>( prevPolygon ? [...prevPolygon,{polygon:currentShape,type:currentShape.type}] : [{polygon:currentShape,type:currentShape.type}]));
     }
-    // setHistory((prevHistory) => (prevHistory ? [...prevHistory,polygons] : [polygons]));
     setPolygonStack([]);
     setIsDrawing(false);
     setCurrentShape({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth,fill:fill});
@@ -494,16 +443,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
 
     setViewBox([newViewBoxX, newViewBoxY, newWidth, newHeight]);
   };
-
-  // const panCanvas = () => {
-  //   setIsPanning(!isPanning);
-  // };
-
-  // const handleShapeClick = (index: number, e: React.MouseEvent<SVGCircleElement | SVGRectElement | SVGEllipseElement>) => {
-  //   if (tool === 'eraser') {
-  //     setShapes(shapes.filter((_, i) => i !== index));
-  //   }
-  // };
 
   const undo = ()=>{
     if (history.length > 1) {
@@ -555,7 +494,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         {currentLine && <Line {...currentLine} />}
         <Shape {...currentShape} />
         {laserPaths.map((path, index) => (
-          // console.log("Las:",path),
           <PolyLine
             key={index}
             points={path}
@@ -566,35 +504,22 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
         {polyLine!==null && <PolyLine {...polyLine} />} 
         
       </svg>
-      {isAddingText && (
+      {tool==="text" && isAddingText && (
         <textarea
           ref={textareaRef}
           value={text?.prompt}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
-          className="absolute text-2xl border border-gray-300 rounded px-3 py-1"
+          className="absolute border border-gray-300 rounded px-3 py-1"
           style={{
             fontFamily: font.style.fontFamily,
             color: stylusColor,
+            fontSize: fontSize,
             left: `${text!.x1-20}px`,
             top: `${text!.y1-20}px`,
           }}
         />
       )}
-      {/* {tool === 'text' && text && (
-        <input
-          type="text"
-          // value={text?.prompt}
-          onChange={(e) => setText((prevText) => ({ ...prevText!, prompt: e.target.value }))}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleKeyDown(e.nativeEvent as KeyboardEvent) }}
-          style={{
-            position: 'absolute',
-            left: `${text.x1}px`,
-            top: `${text.y1}px`,
-            transform: 'translate(-50%, -50%)',
-          }}
-        />
-      )} */}
       <div>
         <button id="undo" onClick={undo}>Undo</button>
         <button id="redo" onClick={redo}>Redo</button>

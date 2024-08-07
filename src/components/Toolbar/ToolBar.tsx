@@ -1,37 +1,39 @@
 "use client"
 
-import React from 'react';
+import {useContext} from 'react';
 import "./ToolBar.css";
 import type { NextFont } from 'next/dist/compiled/@next/font';
 import SecondaryTools from './secondaryTools';
+import { toolbarContext } from '@/app/page';
 
-interface ToolbarProps {
-  stylusColor: string;
-  setStylusColor: (color: string) => void;
-  lineWidth: number;
-  setLineWidth: (width: number) => void;
-  clearCanvas: () => void;
-  downloadImage: () => void;
-  // panCanvas: () => void;
-  selectTool: (tool: string) => void;
-  setFont: (font: NextFont) => void;
-  tool: string;
-  setFill: (fill: string) => void;
-}
+// interface ToolbarProps {
+//   stylusColor: string;
+//   setStylusColor: (color: string) => void;
+//   lineWidth: number;
+//   setLineWidth: (width: number) => void;
+//   clearCanvas: () => void;
+//   downloadImage: () => void;
+//   // panCanvas: () => void;
+//   selectTool: (tool: string) => void;
+//   setFont: (font: NextFont) => void;
+//   tool: string;
+//   setFill: (fill: string) => void;
+// }
 
-const Toolbar: React.FC<ToolbarProps> = ({
-  stylusColor,
-  setStylusColor,
-  lineWidth,
-  setLineWidth,
-  clearCanvas,
-  downloadImage,
-  // panCanvas,
-  selectTool,
-  setFont,
-  setFill,
-  tool
+const Toolbar: React.FC = ({
+  // stylusColor,
+  // setStylusColor,
+  // lineWidth,
+  // setLineWidth,
+  // clearCanvas,
+  // downloadImage,
+  // // panCanvas,
+  // selectTool,
+  // setFont,
+  // setFill,
+  // tool
 }) => {
+  const {stylusColor, setStylusColor, lineWidth, setLineWidth,clearCanvas,downloadImage,selectTool,setFont,tool,setFill} = useContext(toolbarContext);
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setStylusColor(e.target.value);
   };
@@ -76,6 +78,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <label htmlFor="text"> Text </label>
       <input type="radio" onClick={()=> {selectTool('pan')}} name="tool" id="pan" hidden />
       <label htmlFor="pan"> Pan </label>
+      <input type="radio" onClick={()=> {selectTool('select')}} name="tool" id="select" hidden />
+      <label htmlFor="select"> Select </label>
       <input type="radio" onClick={()=> {selectTool('eraser')}} name="tool" id="eraser" hidden />
       <label htmlFor="eraser"> Eraser </label>
       
@@ -105,15 +109,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </button>
     </div>
     <SecondaryTools
-      stylusColor={stylusColor}
-      setStylusColor={setStylusColor}
-      lineWidth={lineWidth}
-      setLineWidth={setLineWidth}
+      // stylusColor={stylusColor}
+      // setStylusColor={setStylusColor}
+      // lineWidth={lineWidth}
+      // setLineWidth={setLineWidth}
       handleColorChange={handleColorChange}
       handleLineWidthChange={handleLineWidthChange}
-      setFont={setFont}
-      setFill = {setFill}
-      tool={tool}
+      // setFont={setFont}
+      // setFill = {setFill}
+      // tool={tool}
       />
     </>
   );

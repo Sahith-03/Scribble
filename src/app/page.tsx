@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState,useRef, useEffect} from 'react';
+import React, { useState,useRef, useEffect,createContext} from 'react';
 import Canvas from '../components/Canvas/Canvas';
 import Toolbar from '../components/Toolbar/ToolBar';
-import {source_code_pro,indie_flower,nunito} from '../components/fonts';
+import {nunito} from '../components/fonts';
 import type { NextFont } from 'next/dist/compiled/@next/font';
+import { clear } from 'console';
 
 
 interface LineData {
@@ -41,6 +42,7 @@ interface textData{
   prompt: string;
   font: NextFont;
   color: string;
+  fontSize: number;
 }
 
 interface PolygonData{
@@ -48,30 +50,38 @@ interface PolygonData{
   type: string;
 }
 
+export const toolbarContext = createContext({
+  stylusColor: '#000000',
+  setStylusColor: (color: string) => {},
+  lineWidth: 2,
+  setLineWidth: (width: number) => {},
+  tool: 'pen',
+  selectTool: (tool: string) => {},
+  font: nunito,
+  setFont: (font: NextFont) => {},
+  fill: 'none',
+  setFill: (fill: string) => {},
+  clearCanvas: () => {},
+  downloadImage: () => {},
+  setFontSize: (size: number) => {}
+});
 
 const Home: React.FC = () => {
   const [stylusColor, setStylusColor] = useState('#000000');
   const divRef = useRef<HTMLDivElement>(null);
   const [lineWidth, setLineWidth] = useState(2);
   const [isPanning, setIsPanning] = useState(false);
-  const [tool, selectTool] = useState('text');
+  const [tool, selectTool] = useState('pen');
   const [polygons,setPolygon] = useState<PolygonData[]>([]);
   const [font, setFont] = useState(nunito);
-  const [fill, setFill] = useState('#ffffff');
+  const [fill, setFill] = useState('none');
+  const [fontSize,setFontSize] = useState(18);
   // const [history, setHistory] = useState<PolygonData[][]>([]);
 
+
+
   const clearCanvas = () => {
-    // const canvas = document.querySelector('svg');
-    // if (canvas) {
-    //   const lines = canvas.querySelectorAll('line');
-    //   lines.forEach(line => line.remove());
-    //   const shapes = canvas.querySelectorAll('rect, circle');
-    //   shapes.forEach(shape => shape.remove());
-    //   const polylines = canvas.querySelectorAll('polyline');
-    //   polylines.forEach(polyline => polyline.remove());
-    // }
-    setPolygon([]);
-    // setHistory((prevHistory) => [...prevHistory, []]); 
+    setPolygon([]); 
   };
 
   const downloadImage = () => {
@@ -99,33 +109,23 @@ const Home: React.FC = () => {
     return background || '#ffffff';
   }
 
-  // const cursor = () => {
-  //   const canvas = document.querySelector('svg');
-  //   if (isPanning) {
-  //     return 'grab';
-  //   }
-  //   if (tool === 'pan') {
-  //     return 'crosshair';
-  //   }
-  //   return 'default';
-  // }
-
   return (
     <>
     <div ref={divRef} className="flex flex-col items-center">
+      <toolbarContext.Provider value={{stylusColor, setStylusColor, lineWidth, setLineWidth, tool, selectTool, font, setFont, fill, setFill,clearCanvas,downloadImage,setFontSize}}>
       <Toolbar
-        stylusColor={stylusColor}
-        setStylusColor={setStylusColor}
-        lineWidth={lineWidth}
-        setLineWidth={setLineWidth}
-        clearCanvas={clearCanvas}
-        downloadImage={downloadImage}
-        // panCanvas={panCanvas}
-        selectTool={selectTool}
-        setFont={setFont}
-        tool={tool}
-        setFill={setFill}
+        // stylusColor={stylusColor}
+        // setStylusColor={setStylusColor}
+        // lineWidth={lineWidth}
+        // setLineWidth={setLineWidth}
+        // clearCanvas={clearCanvas}
+        // downloadImage={downloadImage}
+        // selectTool={selectTool}
+        // setFont={setFont}
+        // tool={tool}
+        // setFill={setFill}
       />
+      </toolbarContext.Provider>
       <Canvas 
       stylusColor={stylusColor}
       lineWidth={lineWidth}
@@ -137,6 +137,7 @@ const Home: React.FC = () => {
       setPolygon={setPolygon}
       font={font}
       fill={fill}
+      fontSize={fontSize}
       // history={history}
       // setHistory={setHistory}
       />
