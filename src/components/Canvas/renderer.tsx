@@ -1,7 +1,6 @@
-"use client"
-
-import React from 'react';
-import type { NextFont } from 'next/dist/compiled/@next/font';
+import React, { useEffect } from 'react';
+import { Rect, Text, Circle, Line } from 'react-konva';
+import { NextFont } from 'next/dist/compiled/@next/font';
 
 interface LineProps {
   x1: number;
@@ -11,9 +10,11 @@ interface LineProps {
   color: string;
   width: number;
   opacity: number;
+  drag?: boolean;
+  handleDragEnd?: () => void;
 }
 
-interface ShapeProps{
+interface ShapeProps {
   x1: number;
   y1: number;
   type: string;
@@ -22,55 +23,108 @@ interface ShapeProps{
   radius?: number;
   color: string;
   strokeWidth: number;
-  index?: number;
   fill: string;
+  drag: boolean;
+  handleDragEnd?: () => void;
 }
 
-interface PolyLineProps{
-  points: string;
+interface PolyLineProps {
+  points: number[];
   color: string;
   width: number;
+  drag?: boolean;
+  handleDragEnd?: () => void;
 }
 
-interface textData{
+interface textData {
   x1: number;
   y1: number;
-  prompt : string;
+  prompt: string;
   font: NextFont;
-  color:string;
+  color: string;
   fontSize: number;
+  drag: boolean;
+  handleDragEnd?: () => void;
 }
 
-const Line: React.FC<LineProps> = ({ x1, y1, x2, y2, color, width,opacity }) => {
-  return <line x1={x1} y1={y1} x2={x2} y2={y2} opacity={opacity} stroke={color} strokeWidth={width} strokeLinecap="round" />;
-};
+const DrawLine: React.FC<LineProps> = React.memo(({ x1, y1, x2, y2, color, width, opacity, drag, handleDragEnd }) => {
+  useEffect(() => {
+    console.log("drag:", drag);
+  }, [drag]);
 
+  return <Line points={[x1, y1, x2, y2]} opacity={opacity} stroke={color} strokeWidth={width} strokeLinecap="round" draggable={drag} onDragEnd={handleDragEnd} />;
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.x1 === nextProps.x1 &&
+    prevProps.y1 === nextProps.y1 &&
+    prevProps.x2 === nextProps.x2 &&
+    prevProps.y2 === nextProps.y2 &&
+    prevProps.color === nextProps.color &&
+    prevProps.width === nextProps.width &&
+    prevProps.opacity === nextProps.opacity &&
+    prevProps.drag === nextProps.drag
+  );
+});
 
-const Shape: React.FC<ShapeProps> = ({ x1, y1, type, width, height, radius, color, strokeWidth, index,fill }) => {
+const DrawShape: React.FC<ShapeProps> = React.memo(({ x1, y1, type, width, height, radius, color, strokeWidth, fill, drag,handleDragEnd }) => {
+  useEffect(() => {
+    console.log("drag:", drag);
+  }, [drag]);
+
   if (type === 'rectangle' || type === 'square') {
-    return <rect x={x1} y={y1} width={width} height={height} stroke={color} strokeWidth={strokeWidth} fill={fill}  />;
-  }
-  else if (type === 'circle') {
-    return <circle cx={x1} cy={y1} r={radius} stroke={color} strokeWidth={strokeWidth} fill={fill} />;
+    return <Rect x={x1} y={y1} width={width} height={height} stroke={color} strokeWidth={strokeWidth} draggable={drag} hitStrokeWidth={1} fill={fill}/>;
+  } else if (type === 'circle') {
+    return <Circle x={x1} y={y1} radius={radius} stroke={color} strokeWidth={strokeWidth} fill={fill} draggable={drag} onDragEnd={handleDragEnd}/>;
   }
   return null;
-};
-
-const PolyLine: React.FC<PolyLineProps> = ({ points, color, width }) => {
-  return <polyline points={points} stroke={color} strokeWidth={width} fill="none" />;
-}
-
-const Text: React.FC<textData> = ({x1,y1,prompt,font,color,fontSize}) => {
-  var string_array = prompt.split("\n");
+}, (prevProps, nextProps) => {
   return (
-    <text x={x1} y={y1} fontSize={fontSize} className={font.className} fill={color} style={{ WebkitUserSelect: 'none' }}>
-      {string_array.map((line, index) => (
-        <tspan key={index} x={x1} dy={`${index === 0 ? 0 : 1.2}em`}>
-          {line}
-        </tspan>
-      ))}
-    </text>
+    prevProps.x1 === nextProps.x1 &&
+    prevProps.y1 === nextProps.y1 &&
+    prevProps.type === nextProps.type &&
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height &&
+    prevProps.radius === nextProps.radius &&
+    prevProps.color === nextProps.color &&
+    prevProps.strokeWidth === nextProps.strokeWidth &&
+    prevProps.fill === nextProps.fill &&
+    prevProps.drag === nextProps.drag
   );
-}
+});
 
-export {Shape,Line,PolyLine,Text};
+const DrawPolyLine: React.FC<PolyLineProps> = React.memo(({ points, color, width, drag , handleDragEnd}) => {
+  useEffect(() => {
+    console.log("drag:", drag);
+  }, [drag]);
+
+  return <Line points={points} stroke={color} strokeWidth={width} fill="none" draggable={drag} onDragEnd={handleDragEnd}/>;
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.points === nextProps.points &&
+    prevProps.color === nextProps.color &&
+    prevProps.width === nextProps.width &&
+    prevProps.drag === nextProps.drag
+  );
+});
+
+const DrawText: React.FC<textData> = React.memo(({ x1, y1, prompt, color, font, fontSize, drag, handleDragEnd }) => {
+  useEffect(() => {
+    console.log("drag:", drag);
+  }, [drag]);
+
+  return (
+    <Text x={x1-50} y={y1-9} text={prompt} fontSize={fontSize} fontFamily={font.style.fontFamily} fill={color} draggable={drag} onDragEnd={handleDragEnd} align={'center'} lineHeight={1.25}/>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.x1 === nextProps.x1 &&
+    prevProps.y1 === nextProps.y1 &&
+    prevProps.prompt === nextProps.prompt &&
+    prevProps.font === nextProps.font &&
+    prevProps.color === nextProps.color &&
+    prevProps.fontSize === nextProps.fontSize &&
+    prevProps.drag === nextProps.drag
+  );
+});
+
+export { DrawShape, DrawLine, DrawPolyLine, DrawText };

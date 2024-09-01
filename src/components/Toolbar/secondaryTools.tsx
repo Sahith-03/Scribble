@@ -73,16 +73,16 @@ const SecondaryTools: React.FC<SecondaryToolsProps> = ({
 
         </div> 
         <label htmlFor="" className='text-sm'>Font Size</label>
-        <div className='flex justify-around items-end'>
+        <div className='flex justify-center items-end gap-3'>
 
-          <input type="radio" onClick={()=>{setFontSize(14)}} id="small" name="fontSize" hidden/>
-          <label htmlFor="small" className='text-base'>Aa</label>    
+          <input type="radio" onClick={()=>{setFontSize(20)}} id="small" name="fontSize" hidden defaultChecked/>
+          <label htmlFor="small" className='text-xl'>Aa</label>    
 
-          <input type="radio" onClick={()=>{setFontSize(18)}} id="medium" name="fontSize" hidden defaultChecked/>
-          <label htmlFor="medium" className='text-lg'>Aa</label>    
+          <input type="radio" onClick={()=>{setFontSize(24)}} id="medium" name="fontSize" hidden />
+          <label htmlFor="medium" className='text-2xl'>Aa</label>    
 
-          <input type="radio" onClick={()=>{setFontSize(24)}} id="large" name="fontSize" hidden/>
-          <label htmlFor="large" className='text-2xl'>Aa</label>    
+          <input type="radio" onClick={()=>{setFontSize(28)}} id="large" name="fontSize" hidden/>
+          <label htmlFor="large" className='text-3xl'>Aa</label>    
         </div>
         </div>
       }

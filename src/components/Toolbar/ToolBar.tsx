@@ -2,9 +2,9 @@
 
 import {useContext} from 'react';
 import "./ToolBar.css";
-import type { NextFont } from 'next/dist/compiled/@next/font';
 import SecondaryTools from './secondaryTools';
-import { toolbarContext } from '@/app/page';
+import { toolbarContext } from '../../app/page';
+import { Button } from '../ui/button';
 
 // interface ToolbarProps {
 //   stylusColor: string;
@@ -45,22 +45,6 @@ const Toolbar: React.FC = ({
   return (
     <>
     <div id="toolbar" className="fixed flex flex-col top-0 left-0 m-4 p-4 bg-white border border-gray-300 rounded shadow-lg space-y-2 z-10">
-      
-      {/* <button onClick={() => selectTool('pan')} className="focus:text-blue-800">
-        Pan
-      </button>
-      <button onClick={() => selectTool('rectangle')} className="focus:text-blue-700">
-        Rectangle
-      </button>
-      <button onClick={() => selectTool('square')} className="focus:text-blue-700">
-        Square
-      </button>
-      <button onClick={() => selectTool('circle')} className="focus:text-blue-700">
-        Circle
-      </button>
-      <button onClick={() => selectTool('laser')} className="focus:text-blue-700">
-        Laser
-      </button> */}
 
       <input type="radio" onClick={()=> {selectTool('laser')}} name="tool" id="laser" hidden/> 
       <label htmlFor="laser"> Laser </label>
@@ -83,27 +67,7 @@ const Toolbar: React.FC = ({
       <input type="radio" onClick={()=> {selectTool('eraser')}} name="tool" id="eraser" hidden />
       <label htmlFor="eraser"> Eraser </label>
       
-      
-      {/* <input
-        type="color"
-        value={stylusColor}
-        onChange={handleColorChange}
-        className="rounded "
-      />
-      <input
-        type="range"
-        min="1"
-        max="10"
-        value={lineWidth}
-        onChange={handleLineWidthChange}
-        className="pl-1 rounded"
-      /> */}
-      <button onClick={clearCanvas} className="p-2 bg-red-500 text-white rounded">
-        Clear
-      </button>
-      {/* <button onClick={panCanvas} className="p-2 bg-gray-500 text-white rounded">
-        Pan
-      </button> */}
+      <Button onClick={clearCanvas} variant="destructive">Clear</Button>
       <button onClick={downloadImage} className="p-2 bg-blue-500 text-white rounded">
         Download
       </button>

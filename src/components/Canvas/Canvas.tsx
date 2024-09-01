@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import {Shape,Line,PolyLine,Text} from './renderer';
-import type { NextFont } from 'next/dist/compiled/@next/font';
-import Quadtree from './Quadtree';
-
-import "./Canvas.css";
+import React, { useState, useRef, useEffect, useCallback, ChangeEvent } from 'react';
+import {DrawShape,DrawLine,DrawPolyLine,DrawText} from './renderer';
+import { Stage, Layer, Transformer } from 'react-konva';
+import { KonvaEventObject } from 'konva/lib/Node';
+import { NextFont } from 'next/dist/compiled/@next/font';
+import Konva from 'konva';
+// import type { NextFont } from 'next/dist/compiled/@next/font';
 
 interface LineData {
   x1: number;
@@ -15,12 +16,15 @@ interface LineData {
   color: string;
   width: number;
   opacity: number;
+  // index: number;
 }
 
 interface PolyLineData{
-  points: string;
+  points: number[];
   color: string;
   width: number;
+  // index: number;
+  type:string;
 }
 
 interface ShapeData{
@@ -33,6 +37,7 @@ interface ShapeData{
   color: string;
   strokeWidth: number;
   fill: string;
+  // index: number;
 }
 
 interface toolBarProps{
@@ -47,6 +52,7 @@ interface toolBarProps{
   setPolygon: React.Dispatch<React.SetStateAction<PolygonData[]>>;
   fill: string;
   fontSize: number;
+  stageRef: React.RefObject<Konva.Stage>;
 }
 
 interface PolygonData{
@@ -61,47 +67,68 @@ interface textData{
   font: NextFont;
   color: string;
   fontSize: number;
+  // index: number;
 }
 
-const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,polygons,setPolygon,font,fill,fontSize}) => {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const textRef = useRef<HTMLTextAreaElement>(null);
+const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPanning,tool,background,polygons,setPolygon,font,fill,fontSize,stageRef}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [viewBox, setViewBox] = useState([0, 0, window.innerWidth, window.innerHeight]);
+  // const [viewBox, setViewBox] = useState([0, 0, window.innerWidth, window.innerHeight]);
   const [lines, setLines] = useState<LineData[]>([]);
   const [polyLine,setPolyLine] = useState<PolyLineData|null>(null); 
   const [shapes,setShapes] = useState<ShapeData[]>([]);
-  const [erasePaths,setErasePaths] = useState<LineData[]>([]);
-  const [points,setPoints] = useState<string>('');
+  const [points,setPoints] = useState<number[]>([]);
   const [currentLine, setCurrentLine] = useState<LineData|null>(null);
   const [currentShape, setCurrentShape] = useState<ShapeData>({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth,fill:fill});
   const [startPan, setStartPan] = useState<{ x: number; y: number } | null>(null);
-  const [laserTimeout, setLaserTimeout] = useState<NodeJS.Timeout | null>(null);
   const [startPoint,setStartPoint] = useState<{x1:number,y1:number}>({x1:0,y1:0});
   const [history,setHistory] = useState<PolygonData[][]>([]);
   const [polygonStack,setPolygonStack] = useState<PolygonData[][]>([]);
   const [text,setText] = useState<textData|null>(null);
   const [isAddingText,setIsAddingText] = useState<boolean>(false);
-  const [laserPaths, setLaserPaths] = useState<string[]>([]);
+  const [laserPaths, setLaserPaths] = useState<number[][]>([[]]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedShapes,setSelectedShapes] = useState<PolygonData[]>([]);
-
-  const quadtreeRef = useRef<Quadtree>(new Quadtree({ x: window.innerWidth/2, y: window.innerHeight/2, w: window.innerWidth/2, h: window.innerHeight/2 }, 4));
+  const [scale, setScale] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
+  const [drag,setDrag] = useState(false);
+  const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 }); // Stage position
+  // const stageRef = useRef(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const transformerRef = useRef<Konva.Transformer>(null);
 
   useEffect(() => {
-    const quadtree = quadtreeRef.current;
-    quadtree.shapes = [];
-    polygons.forEach(polygon => quadtree.insert(polygon));
-  }, [polygons]);
+    if (transformerRef.current && stageRef.current) {
+      const transformer = transformerRef.current;
+      const stage = stageRef.current;
+
+      if (selectedId) {
+        const selectedNode = stage.findOne(`#${selectedId}`);
+        if (selectedNode) {
+          transformer.nodes([selectedNode]);
+          transformer.getLayer()?.batchDraw();
+        }
+      } else {
+        transformer.nodes([]);
+      }
+    }
+  }, [selectedId]);
+
+  
+  useEffect(() => {
+    tool === 'select' ? setDrag(true) : setDrag(false);
+    console.log(" :",drag);
+  },[tool]);
 
   useEffect(() => {
     if(tool === 'pan'){
-      svgRef.current?.classList.add('cursor-grab');
+      canvasRef.current?.classList.add('cursor-grab');
     }
     else{
-      svgRef.current?.classList.remove('cursor-grab');
+      canvasRef.current?.classList.remove('cursor-grab');
     }
-  }, [viewBox]);
+  }, [offsetX, offsetY, scale, tool]);
 
   useEffect(() => {
     if(selectedShapes.length > 0){
@@ -121,8 +148,6 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
   }, [polygons]);
 
-
-
   useEffect(() => {
     console.log('PolygonStack:',polygonStack)
   },[polygonStack])
@@ -132,38 +157,57 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   },[history])
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+  
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+  
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+    // Redraw the shapes, lines, etc.
+    shapes.forEach((shape) => {
+      // Drawing logic here
+    });
+  }, [scale, offsetX, offsetY, shapes]);  
+
+  useEffect(() => {
     console.log('effect');
     const timeout = setTimeout(() => {
     const interval = setInterval(() => {
       setLaserPaths((prevLaserPaths) => {
         if (prevLaserPaths.length === 0) return prevLaserPaths;
   
-        const updatedPaths = [...prevLaserPaths];
-        const points = updatedPaths[0].split(',');
-  
+        var updatedPaths = [...prevLaserPaths];
+        var points = updatedPaths[0];
+        
         if (points.length > 2) {
-          points.shift();
-          updatedPaths[0] = points.join(',');
+          updatedPaths[0] = points.slice(2,);
+          console.log(points.length);
         } else {
+          console.log('removed!!')
           updatedPaths.shift();
         }
   
         return updatedPaths;
       });
-    }, 40);
+    }, 30);
   
     return () => clearInterval(interval);
-    },1000)
+    },500)
     return () => clearTimeout(timeout);
   }, []);
   
 
   useEffect(() => {
     if(tool === 'pen'){
-    setPolyLine({points:points,color:stylusColor,width:lineWidth})
+    setPolyLine({points:points,color:stylusColor,width:lineWidth,type:'polyline'});
     }
     if(tool === 'eraser'){
-    setPolyLine({points:points,color:background,width:lineWidth})
+    setPolyLine({points:points,color:background,width:lineWidth,type:'polyline'});
     }
     if(tool === 'laser'){
     }
@@ -174,101 +218,64 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   },[isDrawing])
 
   const getTransformedCoordinates = (clientX: number, clientY: number) => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    return {
-      x: (x / rect.width) * viewBox[2] + viewBox[0],
-      y: (y / rect.height) * viewBox[3] + viewBox[1],
-    };
+    // const rect = canvasRef.current?.getBoundingClientRect();
+    // if (!rect) return { x: 0, y: 0 };
+    const x = (clientX - stagePosition.x) / scale;
+    const y = (clientY - stagePosition.y) / scale;
+    return { x, y };
   };
 
-  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect) return;
+  const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    console.log("Mouse Down:",e.evt.clientX,e.evt.clientY)
+    const { x, y } = getTransformedCoordinates(e.evt.clientX, e.evt.clientY);
+    // const rect = canvasRef.current?.getBoundingClientRect();
+    // console.log("rect:",rect)
+    // if (!rect) return;
     if(tool === 'pan'){
-    if (e.button === 0) { 
-      svgRef.current?.classList.add('cursor-grabbing');
+    if (e.evt.button === 0) { 
+      canvasRef.current?.classList.add('cursor-grabbing');
       setIsPanning(true);
-      setStartPan({ x: e.clientX, y: e.clientY });
+      setStartPan({x,y});
       return;
     }
     }
     setIsDrawing(true);
-    const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
-    if(tool==="select"){
-      const selected = polygons.find((polygon)=> {
-        if(polygon.type==='line'){
-          const line = polygon.polygon as LineData;
-          const d1 = Math.sqrt(Math.pow(x - line.x1, 2) + Math.pow(y - line.y1, 2));
-          const d2 = Math.sqrt(Math.pow(x - line.x2, 2) + Math.pow(y - line.y2, 2));
-          const d3 = Math.sqrt(Math.pow(line.x1 - line.x2, 2) + Math.pow(line.y1 - line.y2, 2));
-            return Math.abs(d3 - (d1 + d2)) < 1;
-        }
-        else if(polygon.type==='polyline'){
-          // const polyline = polygon.polygon as PolyLineData;
-          // const points = polyline.points.split(",").map((point)=>point.split(" ").map((coord)=>parseInt(coord)));
-          // // const distance = Math.sqrt(Math.pow(x - parseInt(points[0]), 2) + Math.pow(y - parseInt(points[1]), 2));
-          // for(let i=0;i<points.length-1;i++){
-          //   console.log(x,y," ",points[i][0],points[i][1])
-          //   if(x===points[i][0] && y===points[i][1]){
-          //     return true;
-          //   }
-          // }
-          console.log("please update the function")
-          return false;
-        }
-        else if(polygon.type === 'rectangle'){
-          const shape = polygon.polygon as ShapeData;
-          if(shape.width && shape.height){
-          return x >= shape.x1 && x <= shape.x1 + shape.width && y >= shape.y1 && y <= shape.y1 + shape.height;
-          }
-        }
-        else if(polygon.type === 'square'){
-          const shape = polygon.polygon as ShapeData;
-          if(shape.width && shape.height){
-          return x >= shape.x1 && x <= shape.x1 + shape.width && y >= shape.y1 && y <= shape.y1 + shape.height;
-          }
-        }
-        else if(polygon.type === 'circle'){
-          const shape = polygon.polygon as ShapeData;
-          if(shape.radius){
-            const distance = Math.sqrt(Math.pow(x - shape.x1, 2) + Math.pow(y - shape.y1, 2));
-            return distance <= shape.radius;
-          }
-        }
-        else{
-        }
-        return false;
-      });
-      setSelectedShapes(selected?[selected]:[]);
-    }
     if(tool === 'pen' || tool === 'eraser'){
-      setPoints(`${x} ${y}`);
-      setPolyLine({points:'',color:stylusColor,width:lineWidth})
+      setPoints([x,y]);
+      setPolyLine({points:points,color:stylusColor,width:lineWidth,type:"polyline"});
     }
     else if(tool === 'laser'){
-      setLaserPaths((prevPaths)=>[...prevPaths,`${x} ${y}`]);
+      setLaserPaths((prevPaths)=>[...prevPaths,[x,y]]);
     }
     else if(tool === 'line')
     {
-      setCurrentLine({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 })
+      setCurrentLine({ x1: 0, y1: 0, x2: 0, y2: 0, color: stylusColor, width: lineWidth,opacity:1 });
     }
     else if(tool === 'text'){
       setIsAddingText(true);
-      // svgRef.current?.focus();
-      const svg = svgRef.current;
-      if (!svg) return;
+      // canvasRef.current?.focus();
+      // const canvas = canvasRef.current;
+      // if (!canvas) return;
 
-      const point = svg.createSVGPoint();
-      point.x = e.clientX;
-      point.y = e.clientY;
-      const cursorPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
+      // const point = canvas.createSVGPoint();
+      // point.x = e.evt.clientX;
+      // point.y = e.evt.clientY;
+      // const cursorPoint = point.matrixTransform(canvas.getScreenCTM()?.inverse());
+
+      // const canvas = canvasRef.current;
+      // if (!canvas) return;
+      
+      // const rect = canvas.getBoundingClientRect();
+      
+      // const x = (e.evt.clientX - rect.left) * (canvas.width / rect.width);
+      // const y = (e.evt.clientY - rect.top) * (canvas.height / rect.height);
+      
+      const cursorPoint = { x, y }; // This is the equivalent of cursorPoint in the original SVG code
+      
 
       // setTextPosition({ x: cursorPoint.x, y: cursorPoint.y });
       // setTextInput('');
-      setText({ x1: cursorPoint.x, y1: cursorPoint.y, prompt: '', font: font,color:stylusColor,fontSize:fontSize });
+      setText({ x1: cursorPoint.x, y1: cursorPoint.y, prompt: '', font: font,color:stylusColor,fontSize:fontSize});
       requestAnimationFrame(() => textareaRef.current?.focus());
       // console.log("inputRef.current",inputRef.current)
       if (textareaRef.current) {
@@ -320,31 +327,45 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
   }, [isAddingText]);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto'; 
+      textarea.style.width = 'auto'; 
+      textarea.style.height = `${textarea.scrollHeight}px`; 
+      textarea.style.width = `${textarea.scrollWidth}px`;
+    }
     setText((prevText) => {
       if (!prevText) return null;
       return { x1: prevText.x1, y1: prevText.y1, prompt: e.target.value,font:font,color:stylusColor,fontSize:fontSize };
     });
+
   };
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseMove = (e: KonvaEventObject<MouseEvent>) => {
     // if(tool === 'pan'){
-    if (isPanning && startPan) {
-      const dx = e.clientX - startPan.x;
-      const dy = e.clientY - startPan.y;
-      setViewBox([viewBox[0] - dx, viewBox[1] - dy, viewBox[2], viewBox[3]]);
-      setStartPan({ x: e.clientX, y: e.clientY });
-      return;
-    }
+    // if (isPanning && startPan) {
+    //   const dx = e.evt.clientX - startPan.x;
+    //   const dy = e.evt.clientY - startPan.y;
+    //   // setViewBox([viewBox[0] - dx, viewBox[1] - dy, viewBox[2], viewBox[3]]);
+
+    //   setOffsetX((prev) => prev + dx);
+    //   setOffsetY((prev) => prev + dy);
+
+    //   setStartPan({ x: e.evt.clientX, y: e.evt.clientY });
+    //   return;
+    // }
     if (!isDrawing){
       console.log("Cannot Draw",isDrawing)
       return;
     }
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect){ 
-      console.log("SVG:",rect)
-      return;
-    }
-    const { x, y } = getTransformedCoordinates(e.clientX, e.clientY);
+    // const rect = canvasRef.current?.getBoundingClientRect();
+    // if (!rect){ 
+    //   console.log("SVG:",rect)
+    //   return;
+    // }
+    const { x, y } = getTransformedCoordinates(e.evt.clientX, e.evt.clientY);
+    // const x = e.evt.clientX;
+    // const y = e.evt.clientY;
     console.log("Position:",x,y)
     // console.log("Tool:",tool)
 
@@ -355,17 +376,19 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
       console.log("polygons:",polygons.length)
     }
     else if(tool === 'pen' || tool === 'eraser'){
-      setPoints((prevPoints)=>{
-        const currentPoints = prevPoints + `,${x} ${y} `
-        return currentPoints;
-      })
+      setPoints((prevPoints)=>{return [...prevPoints,x,y]});
       
     }
     else if(tool === 'laser'){
       setLaserPaths((prev) => {
-        const newPaths = [...prev];
+        var newPaths = [...prev];
         console.log("Points:",newPaths);
-        newPaths[newPaths.length - 1] = newPaths[newPaths.length - 1] + `,${x} ${y}`;
+        if(newPaths.length>0){
+          newPaths[newPaths.length - 1] = [...newPaths[newPaths.length - 1], x, y];
+        }
+        else{
+          newPaths[newPaths.length - 1] = [x,y]
+        }
         return newPaths;
       });
 
@@ -387,16 +410,16 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
   };
 
-  const fadeLaserLine = (points:string,opacity:number) => {
-    const fadeStep = () => {
-      setPoints((prevPoints)=>{
-        return prevPoints.slice(0,prevPoints.length-1);
-      })
-    };
-    fadeStep();
-  };
+  // const fadeLaserLine = (points:string,opacity:number) => {
+  //   const fadeStep = () => {
+  //     setPoints((prevPoints)=>{
+  //       return prevPoints.slice(0,prevPoints.length-1);
+  //     })
+  //   };
+  //   fadeStep();
+  // };
 
-  const handleMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseUp = (e: KonvaEventObject<MouseEvent>) => {
     if(tool === 'line'){
       console.log("Lines:",lines.length)
       if(currentLine){
@@ -406,14 +429,15 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
     else if(tool === 'pen' && polyLine){
       setPolygon((prevPolygon)=>[...prevPolygon,{polygon:polyLine,type:'polyline'}]);
-      setPoints('');
+      setPoints([]);
     }
     else if(tool === 'eraser' && polyLine){
       setPolygon((prevPolygon)=>[...prevPolygon,{polygon:polyLine,type:'polyline'}]);
-      setPoints('');
+      setPoints([]);
     }
     else if (isPanning && tool === 'pan') {
-      svgRef.current?.classList.remove('cursor-grabbing');
+      console.log('Panning!!')
+      canvasRef.current?.classList.remove('cursor-grabbing');
       setIsPanning(false);
       setStartPan(null);
       return;
@@ -427,22 +451,46 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     setCurrentShape({x1:0,y1:0,type:'',color:stylusColor,strokeWidth:lineWidth,fill:fill});
     setCurrentLine(null);
     setPolyLine(null);
+    setStartPan(null);
   };
 
-  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
-    const newWidth = viewBox[2] * zoomFactor;
-    const newHeight = viewBox[3] * zoomFactor;
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
 
-    const mouseX = e.clientX - svgRef.current!.getBoundingClientRect().left;
-    const mouseY = e.clientY - svgRef.current!.getBoundingClientRect().top;
+    const scaleBy = 1.05; // Scale factor
+    const oldScale = scale;
+    const mousePointTo = {
+      x: e.evt.x / oldScale - stagePosition.x / oldScale,
+      y: e.evt.y / oldScale - stagePosition.y / oldScale,
+    };
 
-    const newViewBoxX = viewBox[0] + (mouseX / svgRef.current!.clientWidth) * (viewBox[2] - newWidth);
-    const newViewBoxY = viewBox[1] + (mouseY / svgRef.current!.clientHeight) * (viewBox[3] - newHeight);
+    // Reverse the zoom direction here
+    const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
 
-    setViewBox([newViewBoxX, newViewBoxY, newWidth, newHeight]);
+    setScale(newScale);
+    setStagePosition({
+      x: -(mousePointTo.x - e.evt.x / newScale) * newScale,
+      y: -(mousePointTo.y - e.evt.y / newScale) * newScale,
+    });
   };
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.width = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+      textarea.style.width = `${textarea.scrollWidth}px`;
+    }
+  }, [text]);
+
+  const handleDragEnd = (e: any) => {
+    // setStagePosition({
+    //   x: e.target.x(),
+    //   y: e.target.y(),
+    // });
+  };
+
 
   const undo = ()=>{
     if (history.length > 1) {
@@ -469,63 +517,73 @@ const Canvas: React.FC<toolBarProps> = ({stylusColor,lineWidth,isPanning,setIsPa
     }
   }
 
-  return (
-    <div className="flex flex-col items-center">
-      <svg
-        ref={svgRef}
-        width="100vw"
-        height="100vh"
-        className={`border border-gray-300 ${tool === 'pan' ? 'cursor-grab': tool ==='text' ? 'cursor-text' : 'cursor-crosshair'}`}
-        viewBox={viewBox.join(' ')}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onWheel={handleWheel}
-        tabIndex={0}
-      >
+return (
+  <div className="flex flex-col items-center">
+    <Stage
+      width={window.innerWidth}
+      height={window.innerHeight}
+      className={`border h-screen w-screen border-gray-300 ${tool === 'pan' ? 'cursor-grab': tool ==='text' ? 'cursor-text' : 'cursor-crosshair'}`}
+      scaleX={scale}
+      scaleY={scale}
+      x={stagePosition.x}
+      y={stagePosition.y}
+      draggable={tool==='pan'? true : false}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onWheel={handleWheel}
+      onDragEnd={handleDragEnd}
+      ref={stageRef}
+    >
+      <Layer>
         {
-          history[history.length - 1]?.map((polygon,index)=>(
-            polygon.type === 'line' ? <Line key={index} {...polygon.polygon as LineData} /> : 
-            polygon.type === 'polyline' ? <PolyLine key={index} {...polygon.polygon as PolyLineData} /> : 
-            polygon.type === 'text' ? <Text key={index} {...polygon.polygon as textData}/>:
-            <Shape key={index} index={index} {...polygon.polygon as ShapeData}/>
+          history[history.length - 1]?.map((polygon, index) => (
+            polygon.type === 'line' ? <DrawLine key={index} {...polygon.polygon as LineData} drag={tool==='select' ? true : false}/> : 
+            polygon.type === 'polyline' ? <DrawPolyLine key={index} {...polygon.polygon as PolyLineData} drag={tool==='select' ? true : false}/> : 
+            polygon.type === 'text' ? <DrawText key={index} {...polygon.polygon as textData} drag={tool==='select' ? true : false}/>:
+            <DrawShape key={index} {...polygon.polygon as ShapeData} drag={tool==='select' ? true : false}/>
           ))
         }
-        {currentLine && <Line {...currentLine} />}
-        <Shape {...currentShape} />
+        {currentLine && <DrawLine {...currentLine}/>}
+        <DrawShape {...currentShape} drag={tool === 'select'}  />
         {laserPaths.map((path, index) => (
-          <PolyLine
+          <DrawPolyLine
             key={index}
             points={path}
             color="red"
             width={2}
+            drag={drag}
           />
         ))}
-        {polyLine!==null && <PolyLine {...polyLine} />} 
-        
-      </svg>
-      {tool==="text" && isAddingText && (
-        <textarea
-          ref={textareaRef}
-          value={text?.prompt}
-          onChange={handleTextChange}
-          onKeyDown={handleKeyDown}
-          className="absolute border border-gray-300 rounded px-3 py-1"
-          style={{
-            fontFamily: font.style.fontFamily,
-            color: stylusColor,
-            fontSize: fontSize,
-            left: `${text!.x1-20}px`,
-            top: `${text!.y1-20}px`,
-          }}
-        />
-      )}
-      <div>
-        <button id="undo" onClick={undo}>Undo</button>
-        <button id="redo" onClick={redo}>Redo</button>
-      </div>
+        {polyLine !== null && <DrawPolyLine {...polyLine}/>} 
+        <Transformer ref={transformerRef}/>
+      </Layer>
+    </Stage>
+    {tool==="text" && isAddingText && (
+      <textarea
+        ref={textareaRef}
+        value={text?.prompt}
+        onChange={handleTextChange}
+        onKeyDown={handleKeyDown}
+        className=" absolute border-npne outline-0 focus:ring-0 text-center"
+        style={{
+          resize: 'none',
+          overflow:'hidden',
+          fontFamily: font.style.fontFamily,
+          color: stylusColor,
+          fontSize: fontSize,
+          left: `${text!.x1-100}px`,
+          top: `${text!.y1-10}px`,
+          whiteSpace: 'nowrap'
+        }}
+      />
+    )}
+    <div>
+      <button id="undo" onClick={undo}>Undo</button>
+      <button id="redo" onClick={redo}>Redo</button>
     </div>
-  );
+  </div>
+);
 };
 
 export default Canvas;

@@ -1,12 +1,10 @@
 "use client"
-
-import React, { useState,useRef, useEffect,createContext} from 'react';
+import React, { useState,useRef,createContext, useEffect} from 'react';
 import Canvas from '../components/Canvas/Canvas';
 import Toolbar from '../components/Toolbar/ToolBar';
-import {nunito} from '../components/fonts';
-import type { NextFont } from 'next/dist/compiled/@next/font';
-import { clear } from 'console';
-
+import { NextFont } from 'next/dist/compiled/@next/font';
+import { nunito } from '../components/fonts';
+import Konva from 'konva';
 
 interface LineData {
   x1: number;
@@ -19,9 +17,11 @@ interface LineData {
 }
 
 interface PolyLineData{
-  points: string;
+  points: number[];
   color: string;
   width: number;
+  // index: number;
+  type:string;
 }
 
 interface ShapeData{
@@ -34,15 +34,17 @@ interface ShapeData{
   color: string;
   strokeWidth: number;
   fill: string;
+  // index: number;
 }
 
 interface textData{
-  x1:number;
-  y1:number;
-  prompt: string;
+  x1: number;
+  y1: number;
+  prompt : string;
   font: NextFont;
   color: string;
   fontSize: number;
+  // index: number;
 }
 
 interface PolygonData{
@@ -69,33 +71,33 @@ export const toolbarContext = createContext({
 const Home: React.FC = () => {
   const [stylusColor, setStylusColor] = useState('#000000');
   const divRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const [lineWidth, setLineWidth] = useState(2);
   const [isPanning, setIsPanning] = useState(false);
-  const [tool, selectTool] = useState('pen');
+  const [tool, selectTool] = useState('text');
   const [polygons,setPolygon] = useState<PolygonData[]>([]);
   const [font, setFont] = useState(nunito);
-  const [fill, setFill] = useState('none');
-  const [fontSize,setFontSize] = useState(18);
+  const [fill, setFill] = useState('');
+  const [fontSize,setFontSize] = useState(20);
+  
   // const [history, setHistory] = useState<PolygonData[][]>([]);
-
-
 
   const clearCanvas = () => {
     setPolygon([]); 
   };
 
   const downloadImage = () => {
-    const svg = document.querySelector('svg');
-    if (!svg) return;
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svg);
-    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
-    const downloadLink = document.createElement('a');
-    downloadLink.href = url;
-    downloadLink.download = 'drawing.svg';
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
+    const stage = stageRef.current;
+    if(stage){
+      const dataURL = stage.toDataURL();
+      const link = document.createElement('a');
+      
+      link.href = dataURL;
+      link.download = 'canvas-image.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const panCanvas = () => {
@@ -111,7 +113,7 @@ const Home: React.FC = () => {
 
   return (
     <>
-    <div ref={divRef} className="flex flex-col items-center">
+    <div ref={divRef} className="flex flex-col items-center ">
       <toolbarContext.Provider value={{stylusColor, setStylusColor, lineWidth, setLineWidth, tool, selectTool, font, setFont, fill, setFill,clearCanvas,downloadImage,setFontSize}}>
       <Toolbar
         // stylusColor={stylusColor}
@@ -138,6 +140,7 @@ const Home: React.FC = () => {
       font={font}
       fill={fill}
       fontSize={fontSize}
+      stageRef={stageRef}
       // history={history}
       // setHistory={setHistory}
       />
