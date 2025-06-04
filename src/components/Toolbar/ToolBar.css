@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* input[type="radio"]:checked + label{
+    @apply text-blue-700;
+}
+
+input[type="radio"] + label{
+    @apply hover:cursor-pointer;
+} */
+
+.history-bar button{
+    @apply border p-2;
+}
+/* label{
+    @apply cursor-pointer;
+} */
